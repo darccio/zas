@@ -3,10 +3,10 @@ package main
 import (
 	"github.com/moovweb/gokogiri"
 	"github.com/moovweb/gokogiri/html"
+	markdown "github.com/russross/blackfriday"
 	"html/template"
 	"io"
 	"io/ioutil"
-	markdown "github.com/russross/blackfriday"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,11 +35,11 @@ func (gen *Generator) Generate(path string, data *ZingyData) {
 		return
 	}
 	defer writer.Close()
-	gen.Layout.Execute(writer, struct { Zingy ZingyData }{ *data, })
+	gen.Layout.Execute(writer, struct{ Zingy ZingyData }{*data})
 }
 
 type ZingyData struct {
-	Body template.HTML
+	Body  template.HTML
 	Title string
 }
 

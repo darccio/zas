@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -42,7 +42,7 @@ func main() {
 	if len(args) > 0 {
 		args[0] = strings.ToLower(args[0])
 	} else {
-		args = []string{ "generate" }
+		args = []string{"generate"}
 	}
 
 	runtime.GOMAXPROCS(runtime.NumCPU())

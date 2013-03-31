@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	yaml "launchpad.net/goyaml"
 	"os"
 	"path/filepath"
-	yaml "launchpad.net/goyaml"
 )
 
 var cmdInit = &Subcommand{
@@ -48,7 +48,7 @@ func init() {
 		}
 		var (
 			data []byte
-			err error
+			err  error
 		)
 		if len(ZNG_DEFAULT_CONF) > 0 {
 			if data, err = yaml.Marshal(&ZNG_DEFAULT_CONF); err != nil {
