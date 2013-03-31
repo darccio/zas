@@ -126,7 +126,9 @@ With no priority or deadline:
 
 1. Pre and post-commands to generation. Imagine chained subcommands configured to execute before or after generating your site.
 2. Metadata in Markdown files as YAML on HTML comments.
-3. Feel free to ask if you think Zingy should do something specific in its core.
+3. To respect customized config.yml in init command on existing repositories.
+4. Tidy up generated HTML with [GoTidy](https://github.com/JalfResi/GoTidy).
+5. Feel free to ask if you think Zingy should do something specific in its core.
 
 ## Contact me
 
