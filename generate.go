@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"github.com/moovweb/gokogiri"
+	"github.com/moovweb/gokogiri/html"
 	"html/template"
 	"io"
 	"io/ioutil"
@@ -27,6 +27,15 @@ func (gen *Generator) GetDeployPath() string {
 
 func (gen *Generator) BuildDeployPath(path string) string {
 	return filepath.Join(gen.GetDeployPath(), path)
+}
+
+func (gen *Generator) Generate(path string, data *ZingyData) {
+	writer, err := os.OpenFile(gen.BuildDeployPath(strings.Replace(path, ".md", ".html", -1)), os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(ZNG_DEFAULT_FILE_PERM))
+	if err != nil {
+		return
+	}
+	defer writer.Close()
+	gen.Layout.Execute(writer, struct { Zingy ZingyData }{ *data, })
 }
 
 type ZingyData struct {
@@ -71,21 +80,15 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	}
 	switch {
 	case info.IsDir():
-		if ierr = os.Mkdir(gen.BuildDeployPath(path), os.FileMode(ZNG_DEFAULT_DIR_PERM)); ierr != nil {
-			return
-		}
+		ierr = os.Mkdir(gen.BuildDeployPath(path), os.FileMode(ZNG_DEFAULT_DIR_PERM))
 	case strings.HasSuffix(path, ".md"):
-		if ierr = gen.render(path); ierr != nil {
-			return
-		}
+		ierr = gen.render(path)
 	case strings.HasSuffix(path, ".html"):
-		fmt.Println("html")
+		ierr = gen.renderHTML(path)
 	default:
-		if ierr = gen.copy(gen.BuildDeployPath(path), path); ierr != nil {
-			return
-		}
+		ierr = gen.copy(gen.BuildDeployPath(path), path)
 	}
-	return nil
+	return
 }
 
 func (gen *Generator) render(path string) (err error) {
@@ -93,26 +96,64 @@ func (gen *Generator) render(path string) (err error) {
 	if err != nil {
 		return
 	}
-	var data ZingyData
 	body := markdown.MarkdownCommon(input)
 	doc, err := gokogiri.ParseHtml(body)
 	if err != nil {
 		return
 	}
 	defer doc.Free()
+	var data ZingyData
 	data.Body = template.HTML(body)
-	result, _ := doc.Search("//h1")
-	data.Title = "undefined"
-	if len(result) > 0 {
-		data.Title = result[0].FirstChild().Content()
-	}
-	dst, err := os.OpenFile(gen.BuildDeployPath(strings.Replace(path, ".md", ".html", -1)), os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(ZNG_DEFAULT_FILE_PERM))
+	data.Title = gen.getTitle(doc)
+	gen.Generate(path, &data)
+	return nil
+}
+
+func (gen *Generator) renderHTML(path string) (err error) {
+	input, err := ioutil.ReadFile(path)
 	if err != nil {
 		return
 	}
-	defer dst.Close()
-	gen.Layout.Execute(dst, struct { Zingy ZingyData }{ data, })
+	doc, err := gokogiri.ParseHtml(input)
+	if err != nil {
+		return
+	}
+	defer doc.Free()
+	result, _ := doc.Search("//embed")
+	for _, e := range result {
+		if e.Attribute("type").Value() != "text/markdown" {
+			continue
+		}
+		src := e.Attribute("src").Value()
+		mdInput, err := ioutil.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		md := markdown.MarkdownCommon(mdInput)
+		mdDoc, err := gokogiri.ParseHtml(md)
+		if err != nil {
+			return err
+		}
+		parent := e.Parent()
+		partial, _ := mdDoc.Search("//body")
+		child, _ := doc.Coerce(partial[0].InnerHtml())
+		parent.AddChild(child)
+		e.Remove()
+	}
+	var data ZingyData
+	body, _ := doc.Search("//body")
+	data.Body = template.HTML(body[0].InnerHtml())
+	data.Title = gen.getTitle(doc)
+	gen.Generate(path, &data)
 	return nil
+}
+
+func (gen *Generator) getTitle(doc *html.HtmlDocument) (title string) {
+	result, _ := doc.Search("//h1")
+	if len(result) > 0 {
+		title = result[0].FirstChild().Content()
+	}
+	return
 }
 
 func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
