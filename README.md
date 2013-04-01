@@ -140,4 +140,4 @@ Written by [Dario Castañé](http://dario.im).
 
 ## License
 
-Zingy is under [GPL v3](http://www.gnu.org/licenses/gpl.html) license.
+Zingy is under [AGPL v3](http://www.gnu.org/licenses/agpl-3.0.html) license.
