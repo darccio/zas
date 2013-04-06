@@ -31,14 +31,14 @@ var ZNG_CONF_FILE = filepath.Join(ZNG_DIR, "config.yml")
 var ZNG_DEFAULT_DIR_PERM = 0755
 var ZNG_DEFAULT_FILE_PERM = 0644
 var ZNG_DEFAULT_CONF = ConfigSection{
-	ZNG: ConfigSection {
+	ZNG: ConfigSection{
 		"layout": filepath.Join(ZNG_DIR, "layout.html"),
 		"deploy": filepath.Join(ZNG_DIR, "deploy"),
 	},
-	"site": ConfigSection {
+	"site": ConfigSection{
 		"baseurl": "http://example.com",
 	},
-	"mimetypes": ConfigSection {
+	"mimetypes": ConfigSection{
 		"text/markdown": "markdown",
 	},
 }

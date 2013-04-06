@@ -21,8 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/moovweb/gokogiri"
-	"github.com/moovweb/gokogiri/xml"
 	"github.com/moovweb/gokogiri/html"
+	"github.com/moovweb/gokogiri/xml"
 	markdown "github.com/russross/blackfriday"
 	"html/template"
 	"io"
@@ -78,7 +78,7 @@ type ZingyData struct {
 
 type ZingySiteData struct {
 	BaseURL string
-	Image string
+	Image   string
 }
 
 func (zd *ZingyData) URL() string {
@@ -275,7 +275,7 @@ func (gen *Generator) handleEmbedTags(doc *html.HtmlDocument) (err error) {
 
 type bufErr struct {
 	buffer []byte
-	err error
+	err    error
 }
 
 func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (err error) {
