@@ -73,7 +73,7 @@ func main() {
 		}
 	}
 	if !found {
-		cmd := exec.Command(fmt.Sprintf("zng%s", args[0]), args[1:]...)
+		cmd := exec.Command(fmt.Sprintf("%s%s", ZNG_PREFIX, args[0]), args[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {

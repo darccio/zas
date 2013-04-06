@@ -41,8 +41,14 @@ func NewConfig() (config ConfigSection, err error) {
 	return
 }
 
-func (cs ConfigSection) GetString(key string) string {
-	return cs[key].(string)
+func (cs ConfigSection) GetString(key string) (value string) {
+	raw := cs[key]
+	if raw == nil {
+		value = ""
+	} else {
+		value = raw.(string)
+	}
+	return
 }
 
 func (cs ConfigSection) GetSection(key string) ConfigSection {
