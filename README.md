@@ -8,14 +8,14 @@ I just wanted to set up a very simple website (just a few pages) with Jekyll and
 
 I checked other projects but they were incomplete, cumbersome or solved the wrong problem (blogs, blogs everywhere). I wanted a zen-like experience. Just a layout and some Markdown files as pages with unobstrusive structure and configuration.
 
-Yes, it is another NIH but... It is a different kind of beast. I probably overlooked some projects but I find no one that satisfied my requirements.
+Yes, it is another NIH but... I think Zingy is a different kind of beast. I admit that I probably overlooked some projects.
 
 ### Where is the difference?
 
 1. Gophers. There is [Hastie](https://github.com/mkaz/hastie) too. If you want a blog.
 2. Markdown only. I really like [Mou](http://mouapp.com/).
 3. Just a loop. Zingy just loops over all .md and .html files (oh, I told a little lie in #2, my bad - please, bear with me) in current directory (and subdirectories), ignoring all any other file (including dot-files).
-4. Your imagination as limit. I plan to add a simple extension mechanism based in subcommands. Do you really need to handle a blog with zingy? Install/create a new extension and do it!
+4. Your imagination as limit. Zingy has a simple extension mechanism based in subcommands. Do you really need to handle a blog with zingy? Install/create a new extension and do it!
 5. Unobstrutive structure, no '_' files. More in [Usage](#usage) section.
 
 ## Usage
@@ -34,17 +34,15 @@ Yes. Enough. Your delightful site is on .zingy/deploy. Enjoy.
 
 Zingy is like water. It can flow or it can cr... Nevermind, Zingy doesn't crash (please fill an issue if it does).
 
-Everything is configurable at .zingy/config.yml. It is created with default vaules everytime you create a repository.
+Everything is configurable at .zingy/config.yml. It is created with default vaules everytime you create a repository. Beware, it is created every time you execute init.
 
 To extend Zingy functionality you can use and create plugins. Developers, you can develop them in any language (not only in Golang) thanks to Unix magic. And more gophers.
 
 ### Plugins
 
-Any prefixed by "zng" (not related to [this](http://en.wikipedia.org/wiki/Croatian_National_Guard)) binary in your [path](http://en.wikipedia.org/wiki/PATH_(variable\)) is a potential Zingy plugin.
+Any prefixed by "zg" or "mzg" is a potential Zingy plugin. All plugins are treated as Zingy subcommands.
 
-All plugins are treated as Zingy subcommands.
-
-For example, we invoke an imaginary plugin called 'znghello' as subcommand:
+For example, we invoke an imaginary plugin called 'zghello' as subcommand:
 
     $ zingy hello
     Hello!
@@ -52,7 +50,21 @@ For example, we invoke an imaginary plugin called 'znghello' as subcommand:
     $ zingy hello World
     Hello World!
 
-That's all. Any command line argument after subcommand name is passed to "znghello" command.
+That's all. Any command line argument after subcommand name is passed to "zghello" command.
+
+#### Ok, what's the deal with "mzg" prefix? (a.k.a. MIME types plugins)
+
+These are MIME type plugins. Zingy uses embed tags to allow easy integration beyond command line. Any MIME type can be configured in .zingy/config.yml under mimetypes section.
+
+    mimetypes:
+      text/markdown: markdown
+      text/yaml+myplugin: myplugin
+
+If Zingy find an embed tag with type attribute set to "text/yaml+myplugin", it will invoke "mzgmyplugin". Zingy expects to process plugin's stdout as HTML. It also pipes stderr to user's shell.
+
+    <embed src="navigation.md" type="text/markdown" />
+
+Maybe you are asking to yourself: "Where is mzgmarkdown?". Nowhere! It is an special case, where Zingy calls an exported method Markdown. Anyway, I wanted to allow to anyone to modify internal Markdown processing if they wish.
 
 If you develop a new plugin, please contact me and I will list it here :) Please, keep in mind: make it [idempotent](http://en.wikipedia.org/wiki/Idempotence).
 
@@ -91,17 +103,24 @@ Just kidding. A normal site would be:
     -rw-r--r--  1 Dario  staff  718 30 mar 16:19 index.md
     -rw-r--r--  1 Dario  staff  991 30 mar 16:20 more.md
 
-All .md files will be converted to HTML and copied in .zingy/deploy using .zingy/layout.html as layout and copying any other files and their structure.
+All .md files will be converted to HTML and copied in .zingy/deploy using .zingy/layout.html as layout and copying any other files and their structure. This is also true for .html files.
 
-This is also true for .html files.
+Keep in mind that any file will be treated as a Go text template before any further processing. You have access to this fields and methods from anywhere:
 
-**Beware**: Zingy won't generate menus for your site. Only .html files.
+* **{{.Body}}**: the file itself in HTML.
+* **{{.Title}}**: autodetected title (first H1 header in file).
+* **{{.Path}}**: file's path (also valid as URL).
+* **{{.Site.BaseURL}}**: URL where this site will be deployed, e.g. http://example.com (without final slash).
+* **{{.Site.Image}}**: URL to main image. Useful for Open Graph and Twitter meta tags.
+* **{{.Page}}**: YAML map from first HTML comment (in Markdown and HTML files). It is optional.
+* **{{.URL}}**: full URL for this file.
+* **{{.Extra "/path/"}}**: map holding .zingy/config.yml as it is. You can access to any value with its full path. E.g. BaseURL is also available as "/site/baseurl".
 
 ### What about layout.html?
 
-It is plain HTML. No frills. Just add a placeholder {{.Zingy.Body}} in your template.
+It is plain HTML. No frills. Just add a placeholder {{.Body}} in your template.
 
-First header level 1 from Markdown files will be made available as {{.Zingy.Title}}.
+First header level 1 from Markdown files will be made available as {{.Title}}.
 
 ### But... I want to do pages beyond post-like format
 
@@ -122,13 +141,7 @@ They will be rendered replacing embed tag if and only if they have type attribut
 
 ## Roadmap
 
-With no priority or deadline:
-
-1. Pre and post-commands to generation. Imagine chained subcommands configured to execute before or after generating your site.
-2. Metadata in Markdown files as YAML on HTML comments.
-3. To respect customized config.yml in init command on existing repositories.
-4. Tidy up generated HTML with [GoTidy](https://github.com/JalfResi/GoTidy).
-5. Feel free to ask if you think Zingy should do something specific in its core.
+Currently there are no new features planned. Feel free to open an issue if you think Zingy should do something specific in its core.
 
 ## Contact me
 
