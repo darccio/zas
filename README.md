@@ -64,7 +64,7 @@ If Zingy find an embed tag with type attribute set to "text/yaml+myplugin", it w
 
     <embed src="navigation.md" type="text/markdown" />
 
-Maybe you are asking to yourself: "Where is mzgmarkdown?". Nowhere! It is an special case, where Zingy calls an exported method Markdown. Anyway, I wanted to allow to anyone to override internal Markdown processing if they wish.
+Maybe you are asking to yourself: "Where is mzgmarkdown?". Nowhere! It is a special case, where Zingy calls an exported method Markdown. Anyway, I wanted to allow to anyone to override internal Markdown processing if they wish.
 
 If you develop a new plugin, please contact me and I will list it here :) Please, keep in mind: make it [idempotent](http://en.wikipedia.org/wiki/Idempotence).
 
