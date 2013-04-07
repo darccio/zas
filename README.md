@@ -60,11 +60,11 @@ These are MIME type plugins. Zingy uses embed tags to allow easy integration bey
       text/markdown: markdown
       text/yaml+myplugin: myplugin
 
-If Zingy find an embed tag with type attribute set to "text/yaml+myplugin", it will invoke "mzgmyplugin". Zingy expects to process plugin's stdout as HTML. It also pipes stderr to user's shell.
+If Zingy find an embed tag with type attribute set to "text/yaml+myplugin", it will invoke "mzgmyplugin". Zingy expects to process plugin's stdout as HTML. It also pipes stderr to user's shell. Any plugin will be called passing current file's path as argument.
 
     <embed src="navigation.md" type="text/markdown" />
 
-Maybe you are asking to yourself: "Where is mzgmarkdown?". Nowhere! It is an special case, where Zingy calls an exported method Markdown. Anyway, I wanted to allow to anyone to modify internal Markdown processing if they wish.
+Maybe you are asking to yourself: "Where is mzgmarkdown?". Nowhere! It is an special case, where Zingy calls an exported method Markdown. Anyway, I wanted to allow to anyone to override internal Markdown processing if they wish.
 
 If you develop a new plugin, please contact me and I will list it here :) Please, keep in mind: make it [idempotent](http://en.wikipedia.org/wiki/Idempotence).
 
