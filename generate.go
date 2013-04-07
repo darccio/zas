@@ -26,7 +26,6 @@ import (
 	"github.com/moovweb/gokogiri/xml"
 	markdown "github.com/russross/blackfriday"
 	thtml "html/template"
-	ttext "text/template"
 	"io"
 	"io/ioutil"
 	yaml "launchpad.net/goyaml"
@@ -36,6 +35,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	ttext "text/template"
 )
 
 var cmdGenerate = &Subcommand{
