@@ -19,7 +19,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"github.com/moovweb/gokogiri"
 	"github.com/moovweb/gokogiri/html"
@@ -31,7 +30,6 @@ import (
 	yaml "launchpad.net/goyaml"
 	"os"
 	"os/exec"
-	pathes "path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -62,55 +60,6 @@ func (gen *Generator) Generate(path string, data *ZingyData) (err error) {
 	}
 	defer writer.Close()
 	return gen.Layout.Execute(writer, data)
-}
-
-type ZingyData struct {
-	Body   thtml.HTML
-	Title  string
-	Path   string
-	Site   ZingySiteData
-	Page   map[interface{}]interface{}
-	config ConfigSection
-}
-
-type ZingySiteData struct {
-	BaseURL string
-	Image   string
-}
-
-func (zd *ZingyData) URL() string {
-	return fmt.Sprintf("%s%s", zd.Site.BaseURL, zd.Path)
-}
-
-func (zd *ZingyData) Extra(path string) (value string, err error) {
-	path = pathes.Clean(path)
-	if pathes.IsAbs(path) {
-		path = path[1:]
-	}
-	steps := strings.Split(path, "/")
-	last := len(steps) - 1
-	key, steps := steps[last], steps[:last]
-	section := zd.config
-	for _, step := range steps {
-		section = section.GetSection(step)
-		if section == nil {
-			err = errors.New("not found")
-			return
-		}
-	}
-	value = section.GetString(key)
-	return
-}
-
-func NewZingyData(path string, config ConfigSection) (data ZingyData) {
-	if strings.HasSuffix(path, ".md") {
-		path = strings.Replace(path, ".md", ".html", -1)
-	}
-	data.Path = fmt.Sprintf("/%s", path)
-	data.config = config
-	data.Site.BaseURL = config.GetSection("site").GetString("baseurl")
-	data.Site.Image = config.GetSection("site").GetString("image")
-	return
 }
 
 func init() {
