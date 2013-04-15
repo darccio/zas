@@ -25,24 +25,44 @@ import (
 	"strings"
 )
 
+/*
+ * Context data store used in templates.
+ */
 type ZingyData struct {
-	Body   thtml.HTML
-	Title  string
-	Path   string
-	Site   ZingySiteData
-	Page   map[interface{}]interface{}
+	// Template used as body from current file.
+	Body thtml.HTML
+	// Current title, from first level header (H1).
+	Title string
+	// Current path (usable in URLs).
+	Path string
+	// Site configuration, as found in ZNG_CONF_FILE.
+	Site ZingySiteData
+	// Current configuration, from first HTML comment (expected as YAML map).
+	Page map[interface{}]interface{}
+	// Config loaded from ZNG_CONF_FILE.
 	config ConfigSection
 }
 
+/*
+ * Site configuration.
+ *
+ * They are required fields in order to complete social/semantic meta tags.
+ */
 type ZingySiteData struct {
 	BaseURL string
 	Image   string
 }
 
+/*
+ * Builds URL from current configuration.
+ */
 func (zd *ZingyData) URL() string {
 	return fmt.Sprintf("%s%s", zd.Site.BaseURL, zd.Path)
 }
 
+/*
+ * Helper template method to get any value from ZingyData.config using pathes.
+ */
 func (zd *ZingyData) Extra(keypath string) (value string, err error) {
 	keypath = path.Clean(keypath)
 	if path.IsAbs(keypath) {
@@ -64,6 +84,7 @@ func (zd *ZingyData) Extra(keypath string) (value string, err error) {
 }
 
 func NewZingyData(filepath string, config ConfigSection) (data ZingyData) {
+	// Any path must finish in ".html".
 	if strings.HasSuffix(filepath, ".md") {
 		filepath = strings.Replace(filepath, ".md", ".html", -1)
 	}

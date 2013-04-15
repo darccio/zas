@@ -29,8 +29,15 @@ var cmdInit = &Subcommand{
 	UsageLine: "init",
 }
 
+/*
+ * Aliasing goyaml's default map type.
+ */
 type ConfigSection map[interface{}]interface{}
 
+/*
+ * Loads ZNG_CONF_FILE (as defined in constants.go).
+ * It must be a YAML file.
+ */
 func NewConfig() (config ConfigSection, err error) {
 	data, err := ioutil.ReadFile(ZNG_CONF_FILE)
 	if err != nil {
@@ -41,6 +48,9 @@ func NewConfig() (config ConfigSection, err error) {
 	return
 }
 
+/*
+ * Returns a string value from current section.
+ */
 func (cs ConfigSection) GetString(key string) (value string) {
 	raw := cs[key]
 	if raw == nil {
@@ -51,11 +61,17 @@ func (cs ConfigSection) GetString(key string) (value string) {
 	return
 }
 
+/*
+ * Returns a subsection from current section.
+ */
 func (cs ConfigSection) GetSection(key string) ConfigSection {
 	value := cs[key].(map[interface{}]interface{})
 	return ConfigSection(value)
 }
 
+/*
+ * Returns a string value from default zingy section.
+ */
 func (cs ConfigSection) GetZString(key string) string {
 	return cs.GetSection(ZNG).GetString(key)
 }
@@ -73,6 +89,8 @@ func init() {
 			data []byte
 			err  error
 		)
+		// If default config variable has fields, we store it as ZNG_CONF_FILE (as defined in constants.go).
+		// It overwrites every time we invoke init subcommand.
 		if len(ZNG_DEFAULT_CONF) > 0 {
 			if data, err = yaml.Marshal(&ZNG_DEFAULT_CONF); err != nil {
 				panic(err)

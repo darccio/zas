@@ -40,19 +40,33 @@ var cmdGenerate = &Subcommand{
 	UsageLine: "generate",
 }
 
+/*
+ * Convenience type to group relevant rendering info.
+ */
 type Generator struct {
+	// Config from ZNG_CONF_FILE.
 	Config ConfigSection
+	// Default layout from Config[ZNG]["layout"].
 	Layout *thtml.Template
 }
 
+/*
+ * Returns deployment base path in config.
+ */
 func (gen *Generator) GetDeployPath() string {
 	return gen.Config.GetZString("deploy")
 }
 
+/*
+ * Builds deployment path for specific file pointed by path.
+ */
 func (gen *Generator) BuildDeployPath(path string) string {
 	return filepath.Join(gen.GetDeployPath(), path)
 }
 
+/*
+ * Renders and writes current file "path" with context "data".
+ */
 func (gen *Generator) Generate(path string, data *ZingyData) (err error) {
 	writer, err := os.OpenFile(gen.BuildDeployPath(data.Path), os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(ZNG_DEFAULT_FILE_PERM))
 	if err != nil {
@@ -75,6 +89,7 @@ func init() {
 			panic(err)
 		}
 		deployPath := gen.GetDeployPath()
+		// If deployment path already exists, it must be deleted.
 		if _, err := os.Stat(deployPath); err == nil {
 			if err = os.RemoveAll(deployPath); err != nil {
 				panic(err)
@@ -83,6 +98,7 @@ func init() {
 		if err = os.Mkdir(deployPath, os.FileMode(ZNG_DEFAULT_DIR_PERM)); err != nil {
 			panic(err)
 		}
+		// Walking function. It allows to bubble up any error from generator.
 		walk := func(path string, info os.FileInfo, err error) error {
 			return gen.walk(path, info, err)
 		}
@@ -93,6 +109,9 @@ func init() {
 	cmdGenerate.Init()
 }
 
+/*
+ * Real walking function. Handles all supported files and copy not supported ones in current deployment path.
+ */
 func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error) {
 	if strings.HasPrefix(path, ".") {
 		return nil
@@ -110,6 +129,9 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	return
 }
 
+/*
+ * Renders a Markdown file.
+ */
 func (gen *Generator) renderMarkdown(path string) (err error) {
 	input, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -119,6 +141,9 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
 	return gen.render(path, md)
 }
 
+/*
+ * Renders a HTML file.
+ */
 func (gen *Generator) renderHTML(path string) (err error) {
 	input, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -127,16 +152,22 @@ func (gen *Generator) renderHTML(path string) (err error) {
 	return gen.render(path, input)
 }
 
+/*
+ * Generic render function. It expects input to be a valid HTML document.
+ * Input can be a valid Go template.
+ */
 func (gen *Generator) render(path string, input []byte) (err error) {
 	template, err := ttext.New("current").Parse(string(input))
 	if err != nil {
 		return
 	}
 	var processed bytes.Buffer
+	// Building context and rendering template.
 	data := NewZingyData(path, gen.Config)
 	if err = template.Execute(&processed, &data); err != nil {
 		return
 	}
+	// Here we manipulate its result.
 	doc, err := gokogiri.ParseHtml(processed.Bytes())
 	if err != nil {
 		return
@@ -160,6 +191,11 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	return gen.Generate(path, &data)
 }
 
+/*
+ * Removes unnecessary paragraph HTML tags generated during Markdown processing by
+ * deleting any <p> without child text nodes (just to avoid deletion if semantic tags
+ * are inside).
+ */
 func (gen *Generator) cleanUnnecessaryPTags(doc *html.HtmlDocument) (err error) {
 	ps, err := doc.Search("//p")
 	if err != nil {
@@ -176,6 +212,7 @@ func (gen *Generator) cleanUnnecessaryPTags(doc *html.HtmlDocument) (err error) 
 			}
 			child = child.NextSibling()
 		}
+		// If current <p> tag doesn't have any child text node, extract children and add to its parent.
 		if !hasText {
 			parent := p.Parent()
 			child = p.FirstChild()
@@ -189,6 +226,9 @@ func (gen *Generator) cleanUnnecessaryPTags(doc *html.HtmlDocument) (err error) 
 	return
 }
 
+/*
+ * Returns first H1 tag as page title.
+ */
 func (gen *Generator) getTitle(doc *html.HtmlDocument) (title string) {
 	result, _ := doc.Search("//h1")
 	if len(result) > 0 {
@@ -197,6 +237,9 @@ func (gen *Generator) getTitle(doc *html.HtmlDocument) (title string) {
 	return
 }
 
+/*
+ * Extracts first HTML commend as map. It expects it as a valid YAML map.
+ */
 func (gen *Generator) extractPageConfig(doc *html.HtmlDocument) (config map[interface{}]interface{}, err error) {
 	result, _ := doc.Search("//comment()")
 	if len(result) > 0 {
@@ -205,6 +248,9 @@ func (gen *Generator) extractPageConfig(doc *html.HtmlDocument) (config map[inte
 	return
 }
 
+/*
+ * Copies a file.
+ */
 func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
 	src, err := os.Open(srcPath)
 	if err != nil {
@@ -220,6 +266,9 @@ func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
 	return
 }
 
+/*
+ * Embeds a Markdown file.
+ */
 func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument) (err error) {
 	src := e.Attribute("src").Value()
 	mdInput, err := ioutil.ReadFile(src)
@@ -245,6 +294,11 @@ func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument) (err error) {
 	return
 }
 
+/*
+ * Handles <embed> tags.
+ *
+ * They can be handled with MIME type plugins or internal exported methods like Markdown.
+ */
 func (gen *Generator) handleEmbedTags(doc *html.HtmlDocument) (err error) {
 	result, err := doc.Search("//embed")
 	if err != nil {
@@ -277,6 +331,10 @@ type bufErr struct {
 	err    error
 }
 
+/*
+ * Invokes a MIME type plugin based on current node's type attribute, passing src attribute's value
+ * as argument. Subcommand's output is piped to Gokogiri through a buffer.
+ */
 func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (err error) {
 	src := e.Attribute("src").Value()
 	typ := e.Attribute("type").Value()
@@ -311,6 +369,9 @@ func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (
 	return
 }
 
+/*
+ * Returns registered plugin (without ZNG_PREFIX) from config.
+ */
 func (gen *Generator) resolveMIMETypePlugin(typ string) string {
 	return gen.Config.GetSection("mimetypes").GetString(typ)
 }

@@ -26,6 +26,11 @@ import (
 	"strings"
 )
 
+/*
+ * Zingy internal subcommand.
+ * 
+ * Inspired by go command.
+ */
 type Subcommand struct {
 	// Runs the subcommand
 	// The args are the arguments after the subcommand name.
@@ -43,11 +48,17 @@ type Subcommand struct {
 	Flag flag.FlagSet
 }
 
+/*
+ * Subcommand init function.
+ */
 func (c *Subcommand) Init() {
 	data := strings.SplitN(c.UsageLine, " ", 2)
 	c.Name = strings.ToLower(data[0])
 }
 
+/*
+ * Current Zingy internal subcommands.
+ */
 var subcommands = []*Subcommand{
 	cmdInit,
 	cmdGenerate,
@@ -59,6 +70,7 @@ func main() {
 	if len(args) > 0 {
 		args[0] = strings.ToLower(args[0])
 	} else {
+		// If no subcommand is provided, we default to "generate".
 		args = []string{"generate"}
 	}
 
@@ -73,6 +85,7 @@ func main() {
 		}
 	}
 	if !found {
+		// If not internal subcommand is found, we try to exec an external Zingy subcommand (plugin).
 		cmd := exec.Command(fmt.Sprintf("%s%s", ZNG_PREFIX, args[0]), args[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
