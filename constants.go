@@ -1,19 +1,19 @@
 /*
  * Copyright (c) 2013 Dario Castañé.
- * This file is part of Zingy.
+ * This file is part of Zas.
  *
- * Zingy is free software: you can redistribute it and/or modify
+ * Zas is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Zingy is distributed in the hope that it will be useful,
+ * Zas is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
- * along with Zingy.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
 package main
 
@@ -23,22 +23,25 @@ import (
 	"strings"
 )
 
-var ZNG = "zingy"
-var ZNG_PREFIX = "zg"
-var ZNG_NAME = strings.Title(ZNG)
-var ZNG_DIR = fmt.Sprintf(".%s", ZNG)
-var ZNG_CONF_FILE = filepath.Join(ZNG_DIR, "config.yml")
-var ZNG_DEFAULT_DIR_PERM = 0755
-var ZNG_DEFAULT_FILE_PERM = 0644
-var ZNG_DEFAULT_CONF = ConfigSection{
-	ZNG: ConfigSection{
-		"layout": filepath.Join(ZNG_DIR, "layout.html"),
-		"deploy": filepath.Join(ZNG_DIR, "deploy"),
+var ZAS = "zas"
+var ZAS_PREFIX = "zs"
+var ZAS_NAME = strings.Title(ZAS)
+var ZAS_DIR = fmt.Sprintf(".%s", ZAS)
+var ZAS_CONF_FILE = filepath.Join(ZAS_DIR, "config.yml")
+var ZAS_DEFAULT_DIR_PERM = 0755
+var ZAS_DEFAULT_FILE_PERM = 0644
+var ZAS_DEFAULT_CONF = ConfigSection {
+	ZAS: ConfigSection {
+		"layout": filepath.Join(ZAS_DIR, "layout.html"),
+		"deploy": filepath.Join(ZAS_DIR, "deploy"),
 	},
-	"site": ConfigSection{
+	"site": ConfigSection {
 		"baseurl": "http://example.com",
+		"default": ConfigSection {
+			"language": "en",
+		},
 	},
-	"mimetypes": ConfigSection{
+	"mimetypes": ConfigSection {
 		"text/markdown": "markdown",
 	},
 }

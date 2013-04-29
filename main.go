@@ -1,19 +1,19 @@
 /*
  * Copyright (c) 2013 Dario Castañé.
- * This file is part of Zingy.
+ * This file is part of Zas.
  *
- * Zingy is free software: you can redistribute it and/or modify
+ * Zas is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Zingy is distributed in the hope that it will be useful,
+ * Zas is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
- * along with Zingy.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
 package main
 
@@ -27,7 +27,7 @@ import (
 )
 
 /*
- * Zingy internal subcommand.
+ * Zas internal subcommand.
  * 
  * Inspired by go command.
  */
@@ -57,7 +57,7 @@ func (c *Subcommand) Init() {
 }
 
 /*
- * Current Zingy internal subcommands.
+ * Current Zas internal subcommands.
  */
 var subcommands = []*Subcommand{
 	cmdInit,
@@ -85,8 +85,8 @@ func main() {
 		}
 	}
 	if !found {
-		// If not internal subcommand is found, we try to exec an external Zingy subcommand (plugin).
-		cmd := exec.Command(fmt.Sprintf("%s%s", ZNG_PREFIX, args[0]), args[1:]...)
+		// If not internal subcommand is found, we try to exec an external Zas subcommand (plugin).
+		cmd := exec.Command(fmt.Sprintf("%s%s", ZAS_PREFIX, args[0]), args[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {

@@ -1,19 +1,19 @@
 /*
  * Copyright (c) 2013 Dario Castañé.
- * This file is part of Zingy.
+ * This file is part of Zas.
  *
- * Zingy is free software: you can redistribute it and/or modify
+ * Zas is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Zingy is distributed in the hope that it will be useful,
+ * Zas is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
- * along with Zingy.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
 package main
 
@@ -35,11 +35,11 @@ var cmdInit = &Subcommand{
 type ConfigSection map[interface{}]interface{}
 
 /*
- * Loads ZNG_CONF_FILE (as defined in constants.go).
+ * Loads ZAS_CONF_FILE (as defined in constants.go).
  * It must be a YAML file.
  */
 func NewConfig() (config ConfigSection, err error) {
-	data, err := ioutil.ReadFile(ZNG_CONF_FILE)
+	data, err := ioutil.ReadFile(ZAS_CONF_FILE)
 	if err != nil {
 		return
 	}
@@ -70,33 +70,33 @@ func (cs ConfigSection) GetSection(key string) ConfigSection {
 }
 
 /*
- * Returns a string value from default zingy section.
+ * Returns a string value from default Zas section.
  */
 func (cs ConfigSection) GetZString(key string) string {
-	return cs.GetSection(ZNG).GetString(key)
+	return cs.GetSection(ZAS).GetString(key)
 }
 
 func init() {
 	cmdInit.Run = func() {
-		path, _ := filepath.Abs(ZNG_DIR)
-		if _, err := os.Stat(ZNG_DIR); os.IsNotExist(err) {
-			os.Mkdir(ZNG_DIR, os.FileMode(ZNG_DEFAULT_DIR_PERM))
-			fmt.Printf("Initialized empty %s repository in %s\n", ZNG_NAME, path)
+		path, _ := filepath.Abs(ZAS_DIR)
+		if _, err := os.Stat(ZAS_DIR); os.IsNotExist(err) {
+			os.Mkdir(ZAS_DIR, os.FileMode(ZAS_DEFAULT_DIR_PERM))
+			fmt.Printf("Initialized empty %s repository in %s\n", ZAS_NAME, path)
 		} else {
-			fmt.Printf("Reinitialized existing %s repository in %s\n", ZNG_NAME, path)
+			fmt.Printf("Reinitialized existing %s repository in %s\n", ZAS_NAME, path)
 		}
 		var (
 			data []byte
 			err  error
 		)
-		// If default config variable has fields, we store it as ZNG_CONF_FILE (as defined in constants.go).
+		// If default config variable has fields, we store it as ZAS_CONF_FILE (as defined in constants.go).
 		// It overwrites every time we invoke init subcommand.
-		if len(ZNG_DEFAULT_CONF) > 0 {
-			if data, err = yaml.Marshal(&ZNG_DEFAULT_CONF); err != nil {
+		if len(ZAS_DEFAULT_CONF) > 0 {
+			if data, err = yaml.Marshal(&ZAS_DEFAULT_CONF); err != nil {
 				panic(err)
 			}
 		}
-		if err := ioutil.WriteFile(ZNG_CONF_FILE, data, os.FileMode(ZNG_DEFAULT_FILE_PERM)); err != nil {
+		if err := ioutil.WriteFile(ZAS_CONF_FILE, data, os.FileMode(ZAS_DEFAULT_FILE_PERM)); err != nil {
 			panic(err)
 		}
 	}

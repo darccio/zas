@@ -1,19 +1,19 @@
 /*
  * Copyright (c) 2013 Dario Castañé.
- * This file is part of Zingy.
+ * This file is part of Zas.
  *
- * Zingy is free software: you can redistribute it and/or modify
+ * Zas is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Zingy is distributed in the hope that it will be useful,
+ * Zas is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
- * along with Zingy.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
 package main
 
@@ -28,18 +28,18 @@ import (
 /*
  * Context data store used in templates.
  */
-type ZingyData struct {
+type ZasData struct {
 	// Template used as body from current file.
 	Body thtml.HTML
 	// Current title, from first level header (H1).
 	Title string
 	// Current path (usable in URLs).
 	Path string
-	// Site configuration, as found in ZNG_CONF_FILE.
-	Site ZingySiteData
+	// Site configuration, as found in ZAS_CONF_FILE.
+	Site ZasSiteData
 	// Current configuration, from first HTML comment (expected as YAML map).
 	Page map[interface{}]interface{}
-	// Config loaded from ZNG_CONF_FILE.
+	// Config loaded from ZAS_CONF_FILE.
 	config ConfigSection
 }
 
@@ -48,7 +48,7 @@ type ZingyData struct {
  *
  * They are required fields in order to complete social/semantic meta tags.
  */
-type ZingySiteData struct {
+type ZasSiteData struct {
 	BaseURL string
 	Image   string
 }
@@ -56,14 +56,14 @@ type ZingySiteData struct {
 /*
  * Builds URL from current configuration.
  */
-func (zd *ZingyData) URL() string {
+func (zd *ZasData) URL() string {
 	return fmt.Sprintf("%s%s", zd.Site.BaseURL, zd.Path)
 }
 
 /*
- * Helper template method to get any value from ZingyData.config using pathes.
+ * Helper template method to get any value from ZasData.config using pathes.
  */
-func (zd *ZingyData) Extra(keypath string) (value string, err error) {
+func (zd *ZasData) Extra(keypath string) (value string, err error) {
 	keypath = path.Clean(keypath)
 	if path.IsAbs(keypath) {
 		keypath = keypath[1:]
@@ -83,7 +83,7 @@ func (zd *ZingyData) Extra(keypath string) (value string, err error) {
 	return
 }
 
-func NewZingyData(filepath string, config ConfigSection) (data ZingyData) {
+func NewZasData(filepath string, config ConfigSection) (data ZasData) {
 	// Any path must finish in ".html".
 	if strings.HasSuffix(filepath, ".md") {
 		filepath = strings.Replace(filepath, ".md", ".html", -1)

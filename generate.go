@@ -1,19 +1,19 @@
 /*
  * Copyright (c) 2013 Dario Castañé.
- * This file is part of Zingy.
+ * This file is part of Zas.
  *
- * Zingy is free software: you can redistribute it and/or modify
+ * Zas is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Zingy is distributed in the hope that it will be useful,
+ * Zas is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
- * along with Zingy.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
 package main
 
@@ -44,9 +44,9 @@ var cmdGenerate = &Subcommand{
  * Convenience type to group relevant rendering info.
  */
 type Generator struct {
-	// Config from ZNG_CONF_FILE.
+	// Config from ZAS_CONF_FILE.
 	Config ConfigSection
-	// Default layout from Config[ZNG]["layout"].
+	// Default layout from Config[ZAS]["layout"].
 	Layout *thtml.Template
 }
 
@@ -67,8 +67,8 @@ func (gen *Generator) BuildDeployPath(path string) string {
 /*
  * Renders and writes current file "path" with context "data".
  */
-func (gen *Generator) Generate(path string, data *ZingyData) (err error) {
-	writer, err := os.OpenFile(gen.BuildDeployPath(data.Path), os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(ZNG_DEFAULT_FILE_PERM))
+func (gen *Generator) Generate(path string, data *ZasData) (err error) {
+	writer, err := os.OpenFile(gen.BuildDeployPath(data.Path), os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(ZAS_DEFAULT_FILE_PERM))
 	if err != nil {
 		return
 	}
@@ -95,7 +95,7 @@ func init() {
 				panic(err)
 			}
 		}
-		if err = os.Mkdir(deployPath, os.FileMode(ZNG_DEFAULT_DIR_PERM)); err != nil {
+		if err = os.Mkdir(deployPath, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
 			panic(err)
 		}
 		// Walking function. It allows to bubble up any error from generator.
@@ -118,7 +118,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	}
 	switch {
 	case info.IsDir():
-		ierr = os.Mkdir(gen.BuildDeployPath(path), os.FileMode(ZNG_DEFAULT_DIR_PERM))
+		ierr = os.Mkdir(gen.BuildDeployPath(path), os.FileMode(ZAS_DEFAULT_DIR_PERM))
 	case strings.HasSuffix(path, ".md"):
 		ierr = gen.renderMarkdown(path)
 	case strings.HasSuffix(path, ".html"):
@@ -163,7 +163,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	}
 	var processed bytes.Buffer
 	// Building context and rendering template.
-	data := NewZingyData(path, gen.Config)
+	data := NewZasData(path, gen.Config)
 	if err = template.Execute(&processed, &data); err != nil {
 		return
 	}
@@ -257,7 +257,7 @@ func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
 		return
 	}
 	defer src.Close()
-	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(ZNG_DEFAULT_FILE_PERM))
+	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(ZAS_DEFAULT_FILE_PERM))
 	if err != nil {
 		return
 	}
@@ -338,7 +338,7 @@ type bufErr struct {
 func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (err error) {
 	src := e.Attribute("src").Value()
 	typ := e.Attribute("type").Value()
-	cmd := exec.Command(fmt.Sprintf("m%s%s", ZNG_PREFIX, gen.resolveMIMETypePlugin(typ)), src)
+	cmd := exec.Command(fmt.Sprintf("m%s%s", ZAS_PREFIX, gen.resolveMIMETypePlugin(typ)), src)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return
@@ -370,7 +370,7 @@ func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (
 }
 
 /*
- * Returns registered plugin (without ZNG_PREFIX) from config.
+ * Returns registered plugin (without ZAS_PREFIX) from config.
  */
 func (gen *Generator) resolveMIMETypePlugin(typ string) string {
 	return gen.Config.GetSection("mimetypes").GetString(typ)

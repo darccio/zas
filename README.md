@@ -1,4 +1,4 @@
-# Zingy
+# Zas
 
 Most. Zen. Static. Website. Generator. Ever.
 
@@ -8,63 +8,67 @@ I just wanted to set up a very simple website (just a few pages) with Jekyll and
 
 I checked other projects but they were incomplete, cumbersome or solved the wrong problem (blogs, blogs everywhere). I wanted a zen-like experience. Just a layout and some Markdown files as pages with unobstrusive structure and configuration.
 
-Yes, it is another NIH but... I think Zingy is a different kind of beast. I admit that I probably overlooked some projects.
+Yes, it is another NIH but... I think Zas is a different kind of beast. I admit that I probably overlooked some projects.
 
 ### Where is the difference?
 
 1. Gophers. There is [Hastie](https://github.com/mkaz/hastie) too. If you want a blog.
 2. Markdown only. I really like [Mou](http://mouapp.com/).
-3. Just a loop. Zingy just loops over all .md and .html files (oh, I told a little lie in #2, my bad - please, bear with me) in current directory (and subdirectories), ignoring all any other file (including dot-files).
-4. Your imagination as limit. Zingy has a simple extension mechanism based in subcommands. Do you really need to handle a blog with zingy? Install/create a new extension and do it!
+3. Just a loop. Zas just loops over all .md and .html files (oh, I told a little lie in #2, my bad - please, bear with me) in current directory (and subdirectories), ignoring all any other file (including dot-files).
+4. Your imagination as limit. Zas has a simple extension mechanism based in subcommands. Do you really need to handle a blog with Zas? Install/create a new extension and do it!
 5. Unobstrutive structure, no '_' files. More in [Usage](#usage) section.
 
 ## Usage
 
-Just do:
+Install:
 
-    $ zingy init
+    $ go get github.com/imdario/zas
 
-A .zingy directory will be created with sane defaults. Put your layout in .zingy/layout.html and you are ready.
+Go to your site's directory and do:
 
-    $ zingy
+    $ zas init
 
-Yes. Enough. Your delightful site is on .zingy/deploy. Enjoy.
+A .zas directory will be created with sane defaults. Put your layout in .zas/layout.html and you are ready.
+
+    $ zas
+
+Yes. Enough. Your delightful site is on .zas/deploy. Enjoy.
 
 ## Configuration and extension
 
-Zingy is like water. It can flow or it can cr... Nevermind, Zingy doesn't crash (please fill an issue if it does).
+Zas is like water. It can flow or it can cr... Nevermind, Zas doesn't crash (please fill an issue if it does).
 
-Everything is configurable at .zingy/config.yml. It is created with default vaules everytime you create a repository. Beware, it is created every time you execute init.
+Everything is configurable at .zas/config.yml. It is created with default vaules everytime you create a repository. Beware, it is created every time you execute init.
 
-To extend Zingy functionality you can use and create plugins. Developers, you can develop them in any language (not only in Golang) thanks to Unix magic. And more gophers.
+To extend Zas functionality you can use and create plugins. Developers, you can develop them in any language (not only in Golang) thanks to Unix magic. And more gophers.
 
 ### Plugins
 
-Any prefixed by "zg" or "mzg" is a potential Zingy plugin. All plugins are treated as Zingy subcommands.
+Any prefixed by "zs" or "mzs" is a potential Zas plugin. All plugins are treated as Zas subcommands.
 
-For example, we invoke an imaginary plugin called 'zghello' as subcommand:
+For example, we invoke an imaginary plugin called 'zshello' as subcommand:
 
-    $ zingy hello
+    $ zas hello
     Hello!
     
-    $ zingy hello World
+    $ zas hello World
     Hello World!
 
-That's all. Any command line argument after subcommand name is passed to "zghello" command.
+That's all. Any command line argument after subcommand name is passed to "zshello" command.
 
-#### Ok, what's the deal with "mzg" prefix? (a.k.a. MIME types plugins)
+#### Ok, what's the deal with "mzs" prefix? (a.k.a. MIME types plugins)
 
-These are MIME type plugins. Zingy uses embed tags to allow easy integration beyond command line. Any MIME type can be configured in .zingy/config.yml under mimetypes section.
+These are MIME type plugins. Zas uses embed tags to allow easy integration beyond command line. Any MIME type can be configured in .zas/config.yml under mimetypes section.
 
     mimetypes:
       text/markdown: markdown
       text/yaml+myplugin: myplugin
 
-If Zingy find an embed tag with type attribute set to "text/yaml+myplugin", it will invoke "mzgmyplugin". Zingy expects to process plugin's stdout as HTML. It also pipes stderr to user's shell. Any plugin will be called passing current file's path as argument.
+If Zas find an embed tag with type attribute set to "text/yaml+myplugin", it will invoke "mzsmyplugin". Zas expects to process plugin's stdout as HTML. It also pipes stderr to user's shell. Any plugin will be called passing current file's path as argument.
 
     <embed src="navigation.md" type="text/markdown" />
 
-Maybe you are asking to yourself: "Where is mzgmarkdown?". Nowhere! It is a special case, where Zingy calls an exported method Markdown. Anyway, I wanted to allow to anyone to override internal Markdown processing if they wish.
+Maybe you are asking to yourself: "Where is mzsmarkdown?". Nowhere! It is a special case, where Zas calls an exported method Markdown. Anyway, I wanted to allow to anyone to override internal Markdown processing if they wish.
 
 If you develop a new plugin, please contact me and I will list it here :) Please, keep in mind: make it [idempotent](http://en.wikipedia.org/wiki/Idempotence).
 
@@ -82,14 +86,14 @@ Just kidding. A normal site would be:
     drwxr-xr-x   5 Dario  staff   170 30 mar 16:18 .
     drwxr-xr-x   6 Dario  staff   204 30 mar 13:17 ..
     drwxr-xr-x  13 Dario  staff   442 27 mar 20:05 .git
-    drwxr-xr-x   3 Dario  staff   102 30 mar 13:18 .zingy
+    drwxr-xr-x   3 Dario  staff   102 30 mar 13:18 .zas
     -rw-r--r--   1 Dario  staff   941 30 mar 16:19 about.md
     -rw-r--r--@  1 Dario  staff  1645 30 mar 15:31 index.md
     drwxr-xr-x   4 Dario  staff   136 30 mar 16:20 section
     
     [...]
     
-    ./.zingy:
+    ./.zas:
     total 0
     drwxr-xr-x  4 Dario  staff   136 30 mar 16:22 .
     drwxr-xr-x  7 Dario  staff   238 30 mar 16:19 ..
@@ -103,7 +107,7 @@ Just kidding. A normal site would be:
     -rw-r--r--  1 Dario  staff  718 30 mar 16:19 index.md
     -rw-r--r--  1 Dario  staff  991 30 mar 16:20 more.md
 
-All .md files will be converted to HTML and copied in .zingy/deploy using .zingy/layout.html as layout and copying any other files and their structure. This is also true for .html files.
+All .md files will be converted to HTML and copied in .zas/deploy using .zas/layout.html as layout and copying any other files and their structure. This is also true for .html files.
 
 Keep in mind that any file will be treated as a Go text template before any further processing. You have access to this fields and methods from anywhere:
 
@@ -114,7 +118,7 @@ Keep in mind that any file will be treated as a Go text template before any furt
 * **{{.Site.Image}}**: URL to main image. Useful for Open Graph and Twitter meta tags.
 * **{{.Page}}**: YAML map from first HTML comment (in Markdown and HTML files). It is optional.
 * **{{.URL}}**: full URL for this file.
-* **{{.Extra "/path/"}}**: map holding .zingy/config.yml as it is. You can access to any value with its full path. E.g. BaseURL is also available as "/site/baseurl".
+* **{{.Extra "/path/"}}**: map holding .zas/config.yml as it is. You can access to any value with its full path. E.g. BaseURL is also available as "/site/baseurl".
 
 ### What about layout.html?
 
@@ -141,11 +145,11 @@ They will be rendered replacing embed tag if and only if they have type attribut
 
 ## Roadmap
 
-Currently there are no new features planned. Feel free to open an issue if you think Zingy should do something specific in its core.
+Currently there are no new features planned. Feel free to open an issue if you think Zas should do something specific in its core.
 
 ## Contact me
 
-If I can help you, you have an idea or you are using Zingy in your projects, don't hesitate to drop me a line (or a pull request): [@im_dario](https://twitter.com/im_dario)
+If I can help you, you have an idea or you are using Zas in your projects, don't hesitate to drop me a line (or a pull request): [@im_dario](https://twitter.com/im_dario)
 
 ## About
 
@@ -153,4 +157,4 @@ Written by [Dario Castañé](http://dario.im).
 
 ## License
 
-Zingy is under [AGPL v3](http://www.gnu.org/licenses/agpl-3.0.html) license.
+Zas is under [AGPL v3](http://www.gnu.org/licenses/agpl-3.0.html) license.
