@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	yaml "launchpad.net/goyaml"
+	"github.com/melvinmt/gt"
 	"os"
 	"path/filepath"
 )
@@ -45,6 +46,20 @@ func NewConfig() (config ConfigSection, err error) {
 	}
 	config = make(ConfigSection)
 	err = yaml.Unmarshal(data, &config)
+	return
+}
+
+/*
+ * Loads ZAS_I18N_FILE (as defined in constants.go).
+ * It must be a YAML file.
+ */
+func NewI18n() (i18n gt.Strings, err error) {
+	data, err := ioutil.ReadFile(ZAS_I18N_FILE)
+	if err != nil {
+		return
+	}
+	i18n = make(gt.Strings)
+	err = yaml.Unmarshal(data, &i18n)
 	return
 }
 

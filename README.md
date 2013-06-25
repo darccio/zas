@@ -119,6 +119,7 @@ Keep in mind that any file will be treated as a Go text template before any furt
 * **{{.Page}}**: YAML map from first HTML comment (in Markdown and HTML files). It is optional.
 * **{{.URL}}**: full URL for this file.
 * **{{.Extra "/path/"}}**: map holding .zas/config.yml as it is. You can access to any value with its full path. E.g. BaseURL is also available as "/site/baseurl".
+* **{{.Language}}**: file current language, if defined in the first comment (as YAML property 'language'). By default, "/site/default/language" value.
 
 ### What about layout.html?
 
@@ -145,7 +146,9 @@ They will be rendered replacing embed tag if and only if they have type attribut
 
 ## Roadmap
 
-Currently there are no new features planned. Feel free to open an issue if you think Zas should do something specific in its core.
+* i18n: automatic translation and helper method to build i18n URLs.
+
+No more features are currently planned. Feel free to open an issue if you think Zas should do something specific in its core.
 
 ## Contact me
 

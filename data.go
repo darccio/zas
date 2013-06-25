@@ -23,6 +23,7 @@ import (
 	thtml "html/template"
 	"path"
 	"strings"
+	"github.com/melvinmt/gt"
 )
 
 /*
@@ -41,6 +42,8 @@ type ZasData struct {
 	Page map[interface{}]interface{}
 	// Config loaded from ZAS_CONF_FILE.
 	config ConfigSection
+	// i18n helper
+	i18n *gt.Build
 }
 
 /*
@@ -83,14 +86,39 @@ func (zd *ZasData) Extra(keypath string) (value string, err error) {
 	return
 }
 
-func NewZasData(filepath string, config ConfigSection) (data ZasData) {
+func (zd *ZasData) Language() (language string) {
+	value, ok := zd.Page["language"]
+	if ok {
+		language = value.(string)
+	} else {
+		language, _ = zd.Extra("/site/default/language")
+	}
+	return
+}
+
+func (zd *ZasData) E(s string, a ...interface{}) (t string) {
+	var err error
+	zd.i18n.SetTarget(zd.Language())
+	if len(a) == 0 {
+		t, err = zd.i18n.Translate(s)
+	} else {
+		t, err = zd.i18n.Translate(s, a)
+	}
+	if err != nil {
+		panic(err)
+	}
+	return
+}
+
+func NewZasData(filepath string, gen *Generator) (data ZasData) {
 	// Any path must finish in ".html".
 	if strings.HasSuffix(filepath, ".md") {
 		filepath = strings.Replace(filepath, ".md", ".html", -1)
 	}
 	data.Path = fmt.Sprintf("/%s", filepath)
-	data.config = config
-	data.Site.BaseURL = config.GetSection("site").GetString("baseurl")
-	data.Site.Image = config.GetSection("site").GetString("image")
+	data.config = gen.Config
+	data.i18n = gen.I18n
+	data.Site.BaseURL = gen.Config.GetSection("site").GetString("baseurl")
+	data.Site.Image = gen.Config.GetSection("site").GetString("image")
 	return
 }

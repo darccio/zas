@@ -24,6 +24,7 @@ import (
 	"github.com/moovweb/gokogiri/html"
 	"github.com/moovweb/gokogiri/xml"
 	markdown "github.com/russross/blackfriday"
+	"github.com/melvinmt/gt"
 	thtml "html/template"
 	"io"
 	"io/ioutil"
@@ -48,6 +49,8 @@ type Generator struct {
 	Config ConfigSection
 	// Default layout from Config[ZAS]["layout"].
 	Layout *thtml.Template
+	// i18n helper.
+	I18n *gt.Build
 }
 
 /*
@@ -87,6 +90,11 @@ func init() {
 		}
 		if gen.Layout, err = thtml.ParseFiles(gen.Config.GetZString("layout")); err != nil {
 			panic(err)
+		}
+		i18nStrings, _ := NewI18n()
+		gen.I18n = &gt.Build {
+			Index: i18nStrings,
+			Origin: gen.Config.GetSection("site").GetSection("default").GetString("language"),
 		}
 		deployPath := gen.GetDeployPath()
 		// If deployment path already exists, it must be deleted.
@@ -163,7 +171,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	}
 	var processed bytes.Buffer
 	// Building context and rendering template.
-	data := NewZasData(path, gen.Config)
+	data := NewZasData(path, gen)
 	if err = template.Execute(&processed, &data); err != nil {
 		return
 	}
@@ -187,7 +195,9 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	if err != nil {
 		return
 	}
-	data.Body = thtml.HTML(body[0].InnerHtml())
+	if len(body) > 0 {
+		data.Body = thtml.HTML(body[0].InnerHtml())
+	}
 	return gen.Generate(path, &data)
 }
 
@@ -207,8 +217,12 @@ func (gen *Generator) cleanUnnecessaryPTags(doc *html.HtmlDocument) (err error) 
 		for child != nil {
 			typ := child.NodeType()
 			if typ == xml.XML_TEXT_NODE {
-				hasText = true
-				break
+				// Little heuristic to remove nodes with visually empty content.
+				content := strings.TrimSpace(child.Content())
+				if content != "" {
+					hasText = true
+					break
+				}
 			}
 			child = child.NextSibling()
 		}
