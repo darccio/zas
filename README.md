@@ -112,14 +112,16 @@ All .md files will be converted to HTML and copied in .zas/deploy using .zas/lay
 Keep in mind that any file will be treated as a Go text template before any further processing. You have access to this fields and methods from anywhere:
 
 * **{{.Body}}**: the file itself in HTML.
-* **{{.Title}}**: autodetected title (first H1 header in file).
+* **{{.Title}}**: autodetected title (first H1 header in file), overridden by "title" property in page's config.
 * **{{.Path}}**: file's path (also valid as URL).
 * **{{.Site.BaseURL}}**: URL where this site will be deployed, e.g. http://example.com (without final slash).
 * **{{.Site.Image}}**: URL to main image. Useful for Open Graph and Twitter meta tags.
 * **{{.Page}}**: YAML map from first HTML comment (in Markdown and HTML files). It is optional.
+* **{{.Directory}}**: YAML map from above (up to project's directory) or current directory's .zas.yml file. It is optional.
 * **{{.URL}}**: full URL for this file.
-* **{{.Extra "/path/"}}**: map holding .zas/config.yml as it is. You can access to any value with its full path. E.g. BaseURL is also available as "/site/baseurl".
-* **{{.Language}}**: file current language, if defined in the first comment (as YAML property 'language'). By default, "/site/default/language" value.
+* **{{.Extra `/path/`}}**: direct access to map holding .zas/config.yml as it is. You can access to any value with its full path. E.g. BaseURL is also available as "/site/baseurl".
+* **{{.Resolve `id`}}**: indirect access to site, directory and page config. It works with simple keys (no paths), checking for them in page, directory and site config (as "/site/<id>"), in this order.
+* **{{.Language}}**: file current language, if defined in the first comment (as YAML property 'language'). By default, "/site/language" value.
 
 ### What about layout.html?
 

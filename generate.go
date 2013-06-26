@@ -51,6 +51,8 @@ type Generator struct {
 	Layout *thtml.Template
 	// i18n helper.
 	I18n *gt.Build
+	// ZasDirectoryConfigs cache
+	cachedZasDirectoryConfigs map[string]ConfigSection
 }
 
 /*
@@ -94,7 +96,7 @@ func init() {
 		i18nStrings, _ := NewI18n()
 		gen.I18n = &gt.Build {
 			Index: i18nStrings,
-			Origin: gen.Config.GetSection("site").GetSection("default").GetString("language"),
+			Origin: gen.Config.GetSection("site").GetString("language"),
 		}
 		deployPath := gen.GetDeployPath()
 		// If deployment path already exists, it must be deleted.
@@ -161,6 +163,35 @@ func (gen *Generator) renderHTML(path string) (err error) {
 }
 
 /*
+ * Loads ZAS_DIR_CONF_FILE (as defined in constants.go) from current
+ * directory or previously found ones.
+ * It must be a YAML file.
+ */
+func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigSection, err error) {
+	var ok bool
+	path := filepath.Dir(currentpath)
+	if config, ok = gen.cachedZasDirectoryConfigs[path]; !ok {
+		data, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE))
+		if err != nil {
+			// Maybe it is an upper directory (already cached or not),
+			// so we call this recursively.
+			// Unless we are at current working directory.
+			if path == "." {
+				return nil, err
+			}
+			return gen.loadZasDirectoryConfig(path)
+		}
+		config = make(ConfigSection)
+		err = yaml.Unmarshal(data, &config)
+		if gen.cachedZasDirectoryConfigs == nil {
+			gen.cachedZasDirectoryConfigs = make(map[string]ConfigSection)
+		}
+		gen.cachedZasDirectoryConfigs[path] = config
+	}
+	return
+}
+
+/*
  * Generic render function. It expects input to be a valid HTML document.
  * Input can be a valid Go template.
  */
@@ -172,6 +203,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	var processed bytes.Buffer
 	// Building context and rendering template.
 	data := NewZasData(path, gen)
+	data.Directory, _ = gen.loadZasDirectoryConfig(path)
 	if err = template.Execute(&processed, &data); err != nil {
 		return
 	}
@@ -190,7 +222,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 		fmt.Println(path, "=>", err)
 		err = nil
 	}
-	data.Title = gen.getTitle(doc)
+	data.FirstTitle = gen.getTitle(doc)
 	body, err := doc.Search("//body")
 	if err != nil {
 		return

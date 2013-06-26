@@ -32,14 +32,16 @@ import (
 type ZasData struct {
 	// Template used as body from current file.
 	Body thtml.HTML
-	// Current title, from first level header (H1).
-	Title string
 	// Current path (usable in URLs).
 	Path string
+	// Title from first level header (H1).
+	FirstTitle string
 	// Site configuration, as found in ZAS_CONF_FILE.
 	Site ZasSiteData
-	// Current configuration, from first HTML comment (expected as YAML map).
+	// In-page configuration, from first HTML comment (expected as YAML map).
 	Page map[interface{}]interface{}
+	// Current directory configuration, from ZAS_DIR_CONF_FILE.
+	Directory ConfigSection
 	// Config loaded from ZAS_CONF_FILE.
 	config ConfigSection
 	// i18n helper
@@ -54,6 +56,17 @@ type ZasData struct {
 type ZasSiteData struct {
 	BaseURL string
 	Image   string
+}
+
+/*
+ * Current title, from page's config and first level header (H1), in this order.
+ */
+func (zd *ZasData) Title() (title string) {
+	title, ok := zd.Page["title"].(string)
+	if !ok {
+		title = zd.FirstTitle
+	}
+	return
 }
 
 /*
@@ -87,13 +100,24 @@ func (zd *ZasData) Extra(keypath string) (value string, err error) {
 }
 
 func (zd *ZasData) Language() (language string) {
-	value, ok := zd.Page["language"]
-	if ok {
-		language = value.(string)
-	} else {
-		language, _ = zd.Extra("/site/default/language")
+	return zd.Resolve("language")
+}
+
+func (zd *ZasData) Resolve(id string) string {
+	var (
+		value interface{}
+		ok bool
+	)
+	value, ok = zd.Page[id]
+	if !ok {
+		if zd.Directory != nil {
+			value, ok = zd.Directory[id]
+		}
+		if !ok {
+			value, _ = zd.Extra(fmt.Sprintf("/site/%s", id))
+		}
 	}
-	return
+	return value.(string)
 }
 
 func (zd *ZasData) E(s string, a ...interface{}) (t string) {

@@ -29,6 +29,7 @@ var ZAS_NAME = strings.Title(ZAS)
 var ZAS_DIR = fmt.Sprintf(".%s", ZAS)
 var ZAS_CONF_FILE = filepath.Join(ZAS_DIR, "config.yml")
 var ZAS_I18N_FILE = filepath.Join(ZAS_DIR, "i18n.yml")
+var ZAS_DIR_CONF_FILE = fmt.Sprintf(".%s.yml", ZAS)
 var ZAS_DEFAULT_DIR_PERM = 0755
 var ZAS_DEFAULT_FILE_PERM = 0644
 var ZAS_DEFAULT_CONF = ConfigSection {
@@ -38,9 +39,7 @@ var ZAS_DEFAULT_CONF = ConfigSection {
 	},
 	"site": ConfigSection {
 		"baseurl": "http://example.com",
-		"default": ConfigSection {
-			"language": "en",
-		},
+		"language": "en",
 	},
 	"mimetypes": ConfigSection {
 		"text/markdown": "markdown",
