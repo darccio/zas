@@ -173,7 +173,7 @@ func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigS
 	if config, ok = gen.cachedZasDirectoryConfigs[path]; !ok {
 		data, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE))
 		if err != nil {
-			// Maybe it is an upper directory (already cached or not),
+			// Maybe .zas.yml is in an upper directory (already cached or not),
 			// so we call this recursively.
 			// Unless we are at current working directory.
 			if path == "." {
@@ -217,6 +217,8 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 		return
 	}
 	gen.cleanUnnecessaryPTags(doc)
+	// TODO Add "magical" i18n support (automatically translate
+	// text and links started by slash).
 	data.Page, err = gen.extractPageConfig(doc)
 	if err != nil {
 		fmt.Println(path, "=>", err)
