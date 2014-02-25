@@ -134,6 +134,10 @@ func (zd *ZasData) E(s string, a ...interface{}) (t string) {
 	return
 }
 
+func (zd *ZasData) IsHome() bool {
+	return zd.Path == "/index.html" || zd.Path == fmt.Sprintf("/%s/index.html", zd.Language())
+}
+
 func NewZasData(filepath string, gen *Generator) (data ZasData) {
 	// Any path must finish in ".html".
 	if strings.HasSuffix(filepath, ".md") {

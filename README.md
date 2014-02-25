@@ -34,11 +34,21 @@ A .zas directory will be created with sane defaults. Put your layout in .zas/lay
 
 Yes. Enough. Your delightful site is on .zas/deploy. Enjoy.
 
+What is happening here? Well, "generate" subcommand is called by default. This subcommand accepts the following flags:
+
+* -verbose: print ALL the things!
+* -full: generates all the input files. By default, zas has an incremental mode which keeps source and deploy directories in sync.
+
 ## Configuration and extension
 
 Zas is like water. It can flow or it can cr... Nevermind, Zas doesn't crash (please fill an issue if it does).
 
 Everything is configurable at .zas/config.yml. It is created with default vaules everytime you create a repository. Beware, it is created every time you execute init.
+
+You can override "site" config section in two ways:
+
+1. HTML comment in files (most precedence).
+1. .zas.yml file at directory level. Its scope is its directory and subdirectories (until another .zas.yml is found).
 
 To extend Zas functionality you can use and create plugins. Developers, you can develop them in any language (not only in Golang) thanks to Unix magic. And more gophers.
 
@@ -55,6 +65,25 @@ For example, we invoke an imaginary plugin called 'zshello' as subcommand:
     Hello World!
 
 That's all. Any command line argument after subcommand name is passed to "zshello" command.
+
+**Beware:** Zas won't pass any configuration information. Plugins are responsible to read configuration, even from directory and page levels. Helper libraries in different languages are welcome!
+
+Also, plugins are free to use .zas directory for their own needs. I recommend to create this directory's structure to avoid colliding issues:
+
+    .zas
+    |-- plugins
+    |   +-- github.com
+    |       +-- imdario
+    |           +-- myplugin
+    +-- ...    
+
+Any "zs" plugin can be invoked through a script tag with type "application/zas+myplugin". Arguments can be passed with data-args attribute, which content will be used as command-line invoke.
+
+    <script type="application/zas+myplugin" data-args="arg1 arg2 ... argN"></script>
+
+The tag is deleted after execution. Any output in stdout will replace the tag.
+
+All plugins will be called in order. Oh, you can even ask for async execution with same-name attribute (hint: async).
 
 #### Ok, what's the deal with "mzs" prefix? (a.k.a. MIME types plugins)
 
@@ -127,7 +156,7 @@ Keep in mind that any file will be treated as a Go text template before any furt
 
 It is plain HTML. No frills. Just add a placeholder {{.Body}} in your template.
 
-First header level 1 from Markdown files will be made available as {{.Title}}.
+First header level 1 from Markdown files will be made available as {{.Title}}, unless it is overridden.
 
 ### But... I want to do pages beyond post-like format
 
@@ -149,6 +178,7 @@ They will be rendered replacing embed tag if and only if they have type attribut
 ## Roadmap
 
 * i18n: automatic translation and helper method to build i18n URLs.
+* Better support for non-mime-type plugins
 
 No more features are currently planned. Feel free to open an issue if you think Zas should do something specific in its core.
 

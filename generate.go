@@ -31,10 +31,10 @@ import (
 	yaml "launchpad.net/goyaml"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"reflect"
 	"strings"
 	ttext "text/template"
+	"path/filepath"
 )
 
 var cmdGenerate = &Subcommand{
@@ -81,6 +81,9 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	return gen.Layout.Execute(writer, data)
 }
 
+var verbose = cmdGenerate.Flag.Bool("verbose", false, "Verbose output")
+var full = cmdGenerate.Flag.Bool("full", false, "Full generation (non-incremental mode)")
+
 func init() {
 	cmdGenerate.Run = func() {
 		var (
@@ -90,7 +93,11 @@ func init() {
 		if gen.Config, err = NewConfig(); err != nil {
 			panic(err)
 		}
-		if gen.Layout, err = thtml.ParseFiles(gen.Config.GetZString("layout")); err != nil {
+		helpers := thtml.FuncMap{
+			"noescape": noescape,
+		}
+		layout := gen.Config.GetZString("layout")
+		if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
 			panic(err)
 		}
 		i18nStrings, _ := NewI18n()
@@ -100,12 +107,12 @@ func init() {
 		}
 		deployPath := gen.GetDeployPath()
 		// If deployment path already exists, it must be deleted.
-		if _, err := os.Stat(deployPath); err == nil {
+		if _, err := os.Stat(deployPath); err == nil && *full {
 			if err = os.RemoveAll(deployPath); err != nil {
 				panic(err)
 			}
 		}
-		if err = os.Mkdir(deployPath, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
+		if err = os.MkdirAll(deployPath, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
 			panic(err)
 		}
 		// Walking function. It allows to bubble up any error from generator.
@@ -115,6 +122,15 @@ func init() {
 		if err := filepath.Walk(".", walk); err != nil {
 			panic(err)
 		}
+		if !*full {
+			// This removes deleted source files in deploy path
+			reapwalk := func(path string, info os.FileInfo, err error) error {
+				return gen.reaper(path, info, err)
+			}
+			if err = filepath.Walk(gen.GetDeployPath(), reapwalk); err != nil {
+				panic(err)
+			}
+		}
 	}
 	cmdGenerate.Init()
 }
@@ -123,20 +139,73 @@ func init() {
  * Real walking function. Handles all supported files and copy not supported ones in current deployment path.
  */
 func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error) {
-	if strings.HasPrefix(path, ".") {
+	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") {
 		return nil
 	}
-	switch {
-	case info.IsDir():
-		ierr = os.Mkdir(gen.BuildDeployPath(path), os.FileMode(ZAS_DEFAULT_DIR_PERM))
-	case strings.HasSuffix(path, ".md"):
-		ierr = gen.renderMarkdown(path)
-	case strings.HasSuffix(path, ".html"):
-		ierr = gen.renderHTML(path)
-	default:
-		ierr = gen.copy(gen.BuildDeployPath(path), path)
+	if info.IsDir() {
+		ierr = os.MkdirAll(gen.BuildDeployPath(path), os.FileMode(ZAS_DEFAULT_DIR_PERM))
+	} else {
+		if gen.sourceIsNewer(path, info) {
+			if *verbose {
+				fmt.Println("+", path)
+			}
+			switch {
+			case strings.HasSuffix(path, ".md"):
+				ierr = gen.renderMarkdown(path)
+			case strings.HasSuffix(path, ".html"):
+				ierr = gen.renderHTML(path)
+			default:
+				ierr = gen.copy(gen.BuildDeployPath(path), path)
+			}
+		}
 	}
 	return
+}
+
+/*
+ * Real reaping function. Reaps all missing source files in current deployment path.
+ */
+func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr error) {
+	sourcePath := strings.Replace(path, gen.GetDeployPath(), ".", 1)
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		reap := true
+		if strings.HasSuffix(sourcePath, ".html") {
+			sourcePath = strings.Replace(sourcePath, ".html", ".md", 1)
+			sourceNew, err := os.Open(sourcePath)
+			if err == nil {
+				sourceNew.Close()
+				reap = false
+			}
+		}
+		if reap {
+			if *verbose {
+				fmt.Println("-", sourcePath)
+			}
+			os.RemoveAll(path)
+		}
+	} else {
+		source.Close()
+	}
+	return
+}
+
+func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
+	// Shortcut
+	if *full {
+		return true
+	}
+	realpath := string(path)
+	if strings.HasSuffix(path, ".md") {
+		realpath = strings.Replace(path, ".md", ".html", 1)
+	}
+	destination, err := os.Open(gen.BuildDeployPath(realpath))
+	if err != nil {
+		return true
+	}
+	defer destination.Close()
+	destinationInfo, _ := destination.Stat()
+	return sourceInfo.ModTime().UnixNano() >= destinationInfo.ModTime().UnixNano()
 }
 
 /*
@@ -217,8 +286,6 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 		return
 	}
 	gen.cleanUnnecessaryPTags(doc)
-	// TODO Add "magical" i18n support (automatically translate
-	// text and links started by slash).
 	data.Page, err = gen.extractPageConfig(doc)
 	if err != nil {
 		fmt.Println(path, "=>", err)
@@ -291,7 +358,7 @@ func (gen *Generator) getTitle(doc *html.HtmlDocument) (title string) {
 func (gen *Generator) extractPageConfig(doc *html.HtmlDocument) (config map[interface{}]interface{}, err error) {
 	result, _ := doc.Search("//comment()")
 	if len(result) > 0 {
-		err = yaml.Unmarshal([]byte(result[0].Content()), &config)
+		_ = yaml.Unmarshal([]byte(result[0].Content()), &config)
 	}
 	return
 }
@@ -386,7 +453,11 @@ type bufErr struct {
 func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (err error) {
 	src := e.Attribute("src").Value()
 	typ := e.Attribute("type").Value()
-	cmd := exec.Command(fmt.Sprintf("m%s%s", ZAS_PREFIX, gen.resolveMIMETypePlugin(typ)), src)
+	cmdname := gen.resolveMIMETypePlugin(typ)
+	if cmdname == "" {
+		return
+	}
+	cmd := exec.Command(fmt.Sprintf("m%s%s", ZAS_PREFIX, cmdname), src)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return
@@ -422,4 +493,8 @@ func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (
  */
 func (gen *Generator) resolveMIMETypePlugin(typ string) string {
 	return gen.Config.GetSection("mimetypes").GetString(typ)
+}
+
+func noescape(text string) thtml.HTML {
+	return thtml.HTML(text)
 }
