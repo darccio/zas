@@ -43,5 +43,7 @@ var ZAS_DEFAULT_CONF = ConfigSection {
 	},
 	"mimetypes": ConfigSection {
 		"text/markdown": "markdown",
+		"text/plain": "plain",
+		"text/html": "html",
 	},
 }

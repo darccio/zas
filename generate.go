@@ -73,12 +73,26 @@ func (gen *Generator) BuildDeployPath(path string) string {
  * Renders and writes current file "path" with context "data".
  */
 func (gen *Generator) Generate(path string, data *ZasData) (err error) {
-	writer, err := os.OpenFile(gen.BuildDeployPath(data.Path), os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(ZAS_DEFAULT_FILE_PERM))
+	var processed bytes.Buffer
+	if err = gen.Layout.Execute(&processed, data); err != nil {
+		return
+	}
+	doc, err := gen.parseAndReplace(processed, data)
 	if err != nil {
 		return
 	}
-	defer writer.Close()
-	return gen.Layout.Execute(writer, data)
+	defer doc.Free()
+	return ioutil.WriteFile(gen.BuildDeployPath(data.Path), []byte(doc.String()), os.FileMode(ZAS_DEFAULT_FILE_PERM))
+}
+
+func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *html.HtmlDocument, err error) {
+	// Here we manipulate its result.
+	doc, err = gokogiri.ParseHtml(processed.Bytes())
+	if err != nil {
+		return
+	}
+	err = gen.handleEmbedTags(doc, data)
+	return
 }
 
 var verbose = cmdGenerate.Flag.Bool("verbose", false, "Verbose output")
@@ -273,18 +287,14 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	// Building context and rendering template.
 	data := NewZasData(path, gen)
 	data.Directory, _ = gen.loadZasDirectoryConfig(path)
-	if err = template.Execute(&processed, &data); err != nil {
+	if err = template.Execute(&processed, data); err != nil {
 		return
 	}
-	// Here we manipulate its result.
-	doc, err := gokogiri.ParseHtml(processed.Bytes())
+	doc, err := gen.parseAndReplace(processed, &data)
 	if err != nil {
 		return
 	}
 	defer doc.Free()
-	if err = gen.handleEmbedTags(doc); err != nil {
-		return
-	}
 	gen.cleanUnnecessaryPTags(doc)
 	data.Page, err = gen.extractPageConfig(doc)
 	if err != nil {
@@ -384,14 +394,14 @@ func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
 /*
  * Embeds a Markdown file.
  */
-func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument) (err error) {
+func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
 	src := e.Attribute("src").Value()
 	mdInput, err := ioutil.ReadFile(src)
 	if err != nil {
 		return err
 	}
 	md := markdown.MarkdownCommon(mdInput)
-	mdDoc, err := gokogiri.ParseHtml(md)
+	mdDoc, err := gen.parseAndReplace(*bytes.NewBuffer(md), data)
 	if err != nil {
 		return err
 	}
@@ -410,11 +420,55 @@ func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument) (err error) {
 }
 
 /*
+ * Embeds a plain text file.
+ */
+func (gen *Generator) Plain(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
+	src := e.Attribute("src").Value()
+	input, err := ioutil.ReadFile(src)
+	if err != nil {
+		 return err
+	}
+	parent := e.Parent()
+	template, err := ttext.New("current").Parse(string(input))
+	if err != nil {
+		return
+	}
+	var processed bytes.Buffer
+	if err = template.Execute(&processed, data); err != nil {
+		return
+	}
+	child := doc.CreateTextNode(string(processed.Bytes()))
+	parent.AddChild(child)
+	e.Remove()
+	return
+}
+
+/*
+ * Embeds a HTML file.
+ */
+func (gen *Generator) Html(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
+	src := e.Attribute("src").Value()
+	input, err := ioutil.ReadFile(src)
+	if err != nil {
+		 return err
+	}
+	parent := e.Parent()
+	htmlDoc, err := gen.parseAndReplace(*bytes.NewBuffer(input), data)
+	nodes, err := parent.Coerce(htmlDoc.String())
+	if err != nil {
+		return err
+	}
+	parent.AddChild(nodes)
+	e.Remove()
+	return
+}
+
+/*
  * Handles <embed> tags.
  *
  * They can be handled with MIME type plugins or internal exported methods like Markdown.
  */
-func (gen *Generator) handleEmbedTags(doc *html.HtmlDocument) (err error) {
+func (gen *Generator) handleEmbedTags(doc *html.HtmlDocument, data *ZasData) (err error) {
 	result, err := doc.Search("//embed")
 	if err != nil {
 		return
@@ -425,9 +479,10 @@ func (gen *Generator) handleEmbedTags(doc *html.HtmlDocument) (err error) {
 		if method == reflect.ValueOf(nil) {
 			err = gen.handleMIMETypePlugin(e, doc)
 		} else {
-			args := make([]reflect.Value, 2)
+			args := make([]reflect.Value, 3)
 			args[0] = reflect.ValueOf(e)
 			args[1] = reflect.ValueOf(doc)
+			args[2] = reflect.ValueOf(data)
 			r := method.Call(args)
 			rerr := r[0].Interface()
 			if ierr, ok := rerr.(error); ok {
