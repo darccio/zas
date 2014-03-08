@@ -122,13 +122,8 @@ func (zd *ZasData) Resolve(id string) string {
 
 func (zd *ZasData) E(s string, a ...interface{}) (t string) {
 	var err error
-	target := zd.Language()
-	if (zd.config.GetSection("site").GetString("language") == target) {
-		return s
-	}
-	zd.i18n.SetTarget(target)
+	zd.i18n.SetTarget(zd.Language())
 	if len(a) == 0 {
-		fmt.Println(s)
 		t, err = zd.i18n.Translate(s)
 	} else {
 		t, err = zd.i18n.Translate(s, a)

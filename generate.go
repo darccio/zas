@@ -114,10 +114,11 @@ func init() {
 		if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
 			panic(err)
 		}
-		i18nStrings, _ := NewI18n()
+		mainlang := gen.Config.GetSection("site").GetString("language")
+		i18nStrings, _ := NewI18n(mainlang)
 		gen.I18n = &gt.Build {
 			Index: i18nStrings,
-			Origin: gen.Config.GetSection("site").GetString("language"),
+			Origin: mainlang,
 		}
 		deployPath := gen.GetDeployPath()
 		// If deployment path already exists, it must be deleted.

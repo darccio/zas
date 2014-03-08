@@ -53,13 +53,18 @@ func NewConfig() (config ConfigSection, err error) {
  * Loads ZAS_I18N_FILE (as defined in constants.go).
  * It must be a YAML file.
  */
-func NewI18n() (i18n gt.Strings, err error) {
+func NewI18n(mainlang string) (i18n gt.Strings, err error) {
 	data, err := ioutil.ReadFile(ZAS_I18N_FILE)
 	if err != nil {
 		return
 	}
 	i18n = make(gt.Strings)
 	err = yaml.Unmarshal(data, &i18n)
+	for k, v := range i18n {
+		if _, ok := v[mainlang]; !ok {
+			v[mainlang] = k
+		}
+	}
 	return
 }
 
