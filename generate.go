@@ -109,13 +109,17 @@ func init() {
 		}
 		helpers := thtml.FuncMap{
 			"noescape": noescape,
+			"eq": eq,
 		}
 		layout := gen.Config.GetZString("layout")
 		if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
 			panic(err)
 		}
 		mainlang := gen.Config.GetSection("site").GetString("language")
-		i18nStrings, _ := NewI18n(mainlang)
+		i18nStrings, err := NewI18n(mainlang)
+		if err != nil {
+			panic(err)
+		}
 		gen.I18n = &gt.Build {
 			Index: i18nStrings,
 			Origin: mainlang,
@@ -553,4 +557,8 @@ func (gen *Generator) resolveMIMETypePlugin(typ string) string {
 
 func noescape(text string) thtml.HTML {
 	return thtml.HTML(text)
+}
+
+func eq(a, b interface{}) bool {
+	return a == b
 }

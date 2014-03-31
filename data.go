@@ -135,6 +135,10 @@ func (zd *ZasData) E(s string, a ...interface{}) (t string) {
 	return
 }
 
+func (zd *ZasData) H(s string, a ...interface{}) (h thtml.HTML) {
+	return thtml.HTML(zd.E(s, a...))
+}
+
 func (zd *ZasData) IsHome() bool {
 	return zd.Path == "/index.html" || zd.Path == fmt.Sprintf("/%s/index.html", zd.Language())
 }
