@@ -20,7 +20,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	yaml "launchpad.net/goyaml"
+	yaml "gopkg.in/yaml.v1"
 	"github.com/melvinmt/gt"
 	"os"
 	"path/filepath"

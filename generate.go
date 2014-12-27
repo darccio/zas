@@ -28,7 +28,7 @@ import (
 	thtml "html/template"
 	"io"
 	"io/ioutil"
-	yaml "launchpad.net/goyaml"
+	yaml "gopkg.in/yaml.v1"
 	"os"
 	"os/exec"
 	"reflect"

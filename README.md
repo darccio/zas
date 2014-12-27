@@ -193,3 +193,7 @@ Written by [Dario Castañé](http://dario.im).
 ## License
 
 Zas is under [AGPL v3](http://www.gnu.org/licenses/agpl-3.0.html) license.
+
+## Other cool projects
+
+Recently I found this cool generator inspired by zas: [zs](https://github.com/zserge/zs). I'm happy to be a humble reference for somebody :)
