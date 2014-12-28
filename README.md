@@ -179,6 +179,11 @@ They will be rendered replacing embed tag if and only if they have type attribut
 
 對不起。T我不会说普通话。That's all my Chinese! If you are here, I guess you will enjoy I18N support in Zas.
 
+
+### I18N?
+
+Yeah, internationalization: you can build multilingual sites with Zas!
+
 You only need thre simple steps. First, create a i18n.yml file inside your .zas directory, like this:
 
     Main page:
@@ -206,7 +211,7 @@ Set your site's main language in .zas/config.yml:
 
 And set each file's language in first comment or, if you have lots of files, as a .zas.yml in a subdirectory where to group them.
 
-    .zas
+    .zas/
     index.md
     faq.md
     +-- zh
@@ -226,7 +231,7 @@ And set each file's language in first comment or, if you have lots of files, as 
         +-- index.md
         +-- faq.md
 
-Your .zas.yml will look like this for Russian (ru):
+Your .zas.yml will look like this, i.e. for Russian (ru):
 
     language: ru
 
