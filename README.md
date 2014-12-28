@@ -71,7 +71,7 @@ That's all. Any command line argument after subcommand name is passed to "zshell
 Also, plugins are free to use .zas directory for their own needs. I recommend to create this directory's structure to avoid colliding issues:
 
     .zas
-    |-- plugins
+    +-- plugins
     |   +-- github.com
     |       +-- imdario
     |           +-- myplugin
@@ -108,7 +108,7 @@ Your site layout will look like this:
     $ ls
     $
 
-Just kidding. A normal site would be:
+Just kidding. A site would be:
 
     $ ls -laR
     total 8
@@ -175,9 +175,63 @@ What does it mean? It means you can have .html files with embedded markdown file
 
 They will be rendered replacing embed tag if and only if they have type attribute set as "text/markdown".
 
+## 你会说普通话?
+
+對不起。T我不会说普通话。That's all my Chinese! If you are here, I guess you will enjoy I18N support in Zas.
+
+You only need thre simple steps. First, create a i18n.yml file inside your .zas directory, like this:
+
+    Main page:
+        zh: 首页
+        ru: Заглавная страница 
+        es: Portada
+        ca: Portada
+    Create account:
+        zh: 创建账户
+        ru: Создать учётную запись
+        es: Crear una cuenta
+        ca: Crea un compte
+    Log in:
+        zh: 登录
+        ru: Войти
+        es: Acceder
+        ca: Inicia la sessió
+
+Set your site's main language in .zas/config.yml:
+
+    [...]
+    site:
+        language: en
+    [...]
+
+And set each file's language in first comment or, if you have lots of files, as a .zas.yml in a subdirectory where to group them.
+
+    .zas
+    index.md
+    faq.md
+    +-- zh
+        +-- .zas.yml
+        +-- index.md
+        +-- faq.md
+    +-- ru
+        +-- .zas.yml
+        +-- index.md
+        +-- faq.md
+    +-- es
+        +-- .zas.yml
+        +-- index.md
+        +-- faq.md
+    +-- ca
+        +-- .zas.yml
+        +-- index.md
+        +-- faq.md
+
+Your .zas.yml will look like this for Russian (ru):
+
+    language: ru
+
 ## Roadmap
 
-* i18n: automatic translation and helper method to build i18n URLs.
 * Better support for non-mime-type plugins
 
 No more features are currently planned. Feel free to open an issue if you think Zas should do something specific in its core.
