@@ -73,7 +73,6 @@ func main() {
 		// If no subcommand is provided, we default to "generate".
 		args = []string{"generate"}
 	}
-
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	found := false
 	for _, cmd := range subcommands {

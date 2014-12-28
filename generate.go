@@ -37,9 +37,15 @@ import (
 	ttext "text/template"
 )
 
-var cmdGenerate = &Subcommand{
-	UsageLine: "generate",
-}
+var (
+	cmdGenerate = &Subcommand{
+		UsageLine: "generate",
+	}
+	helpers = thtml.FuncMap{
+		"noescape": noescape,
+		"eq":       eq,
+	}
+)
 
 /*
  * Convenience type to group relevant rendering info.
@@ -107,32 +113,12 @@ func init() {
 		if gen.Config, err = NewConfig(); err != nil {
 			panic(err)
 		}
-		helpers := thtml.FuncMap{
-			"noescape": noescape,
-			"eq":       eq,
-		}
-		layout := gen.Config.GetZString("layout")
-		if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
-			panic(err)
-		}
-		mainlang := gen.Config.GetSection("site").GetString("language")
-		i18nStrings, err := NewI18n(mainlang)
-		if err != nil {
-			panic(err)
-		}
-		gen.I18n = &gt.Build{
-			Index:  i18nStrings,
-			Origin: mainlang,
-		}
-		deployPath := gen.GetDeployPath()
-		// If deployment path already exists, it must be deleted.
-		if _, err := os.Stat(deployPath); err == nil && *full {
-			if err = os.RemoveAll(deployPath); err != nil {
-				panic(err)
-			}
-		}
-		if err = os.MkdirAll(deployPath, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
-			panic(err)
+		done := make(chan bool)
+		go gen.parseLayout(done)
+		go gen.loadI18N(done)
+		go gen.handleDeployPath(*full, done)
+		for i := 0; i < 3; i++ {
+			<-done
 		}
 		// Walking function. It allows to bubble up any error from generator.
 		walk := func(path string, info os.FileInfo, err error) error {
@@ -154,6 +140,42 @@ func init() {
 	cmdGenerate.Init()
 }
 
+func (gen *Generator) parseLayout(done chan bool) {
+	var err error
+	layout := gen.Config.GetZString("layout")
+	if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
+		panic(err)
+	}
+	done <- true
+}
+
+func (gen *Generator) loadI18N(done chan bool) {
+	mainlang := gen.Config.GetSection("site").GetString("language")
+	i18nStrings, err := NewI18n(mainlang)
+	if err != nil {
+		panic(err)
+	}
+	gen.I18n = &gt.Build{
+		Index:  i18nStrings,
+		Origin: mainlang,
+	}
+	done <- true
+}
+
+func (gen *Generator) handleDeployPath(full bool, done chan bool) {
+	deployPath := gen.GetDeployPath()
+	// If deployment path already exists, it must be deleted.
+	if _, err := os.Stat(deployPath); err == nil && full {
+		if err = os.RemoveAll(deployPath); err != nil {
+			panic(err)
+		}
+	}
+	if err := os.MkdirAll(deployPath, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
+		panic(err)
+	}
+	done <- true
+}
+
 /*
  * Real walking function. Handles all supported files and copy not supported ones in current deployment path.
  */
@@ -168,6 +190,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 			if *verbose {
 				fmt.Println("+", path)
 			}
+			// TODO parallelize with a blocking chan err and another non-blocking exit chan
 			switch {
 			case strings.HasSuffix(path, ".md"):
 				ierr = gen.renderMarkdown(path)

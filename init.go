@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/imdario/mergo"
 	"github.com/melvinmt/gt"
 	yaml "gopkg.in/yaml.v1"
 	"io/ioutil"
@@ -46,6 +47,10 @@ func NewConfig() (config ConfigSection, err error) {
 	}
 	config = make(ConfigSection)
 	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return
+	}
+	err = mergo.Merge(&config, ZAS_DEFAULT_CONF)
 	return
 }
 
@@ -89,16 +94,20 @@ func (cs ConfigSection) GetString(key string) (value string) {
 /*
  * Returns a subsection from current section.
  */
-func (cs ConfigSection) GetSection(key string) ConfigSection {
-	value := cs[key].(map[interface{}]interface{})
-	return ConfigSection(value)
+func (cs ConfigSection) GetSection(key string) (value ConfigSection) {
+	var ok bool
+	if value, ok = cs[key].(ConfigSection); !ok {
+		value = ConfigSection(cs[key].(map[interface{}]interface{}))
+	}
+	return
 }
 
 /*
  * Returns a string value from default Zas section.
  */
 func (cs ConfigSection) GetZString(key string) string {
-	return cs.GetSection(ZAS).GetString(key)
+	s := cs.GetSection(ZAS)
+	return s.GetString(key)
 }
 
 func init() {
