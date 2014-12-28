@@ -184,7 +184,7 @@ They will be rendered replacing embed tag if and only if they have type attribut
 
 Yeah, internationalization: you can build multilingual sites with Zas!
 
-You only need thre simple steps. First, create a i18n.yml file inside your .zas directory, like this:
+You only need to do three simple steps. First, create a i18n.yml file inside your .zas directory, like this:
 
     Main page:
         zh: 首页
