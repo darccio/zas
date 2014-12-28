@@ -19,9 +19,9 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
-	yaml "gopkg.in/yaml.v1"
 	"github.com/melvinmt/gt"
+	yaml "gopkg.in/yaml.v1"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 )

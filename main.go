@@ -28,7 +28,7 @@ import (
 
 /*
  * Zas internal subcommand.
- * 
+ *
  * Inspired by go command.
  */
 type Subcommand struct {

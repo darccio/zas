@@ -20,21 +20,21 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"github.com/melvinmt/gt"
 	"github.com/moovweb/gokogiri"
 	"github.com/moovweb/gokogiri/html"
 	"github.com/moovweb/gokogiri/xml"
 	markdown "github.com/russross/blackfriday"
-	"github.com/melvinmt/gt"
+	yaml "gopkg.in/yaml.v1"
 	thtml "html/template"
 	"io"
 	"io/ioutil"
-	yaml "gopkg.in/yaml.v1"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	ttext "text/template"
-	"path/filepath"
 )
 
 var cmdGenerate = &Subcommand{
@@ -109,7 +109,7 @@ func init() {
 		}
 		helpers := thtml.FuncMap{
 			"noescape": noescape,
-			"eq": eq,
+			"eq":       eq,
 		}
 		layout := gen.Config.GetZString("layout")
 		if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
@@ -120,8 +120,8 @@ func init() {
 		if err != nil {
 			panic(err)
 		}
-		gen.I18n = &gt.Build {
-			Index: i18nStrings,
+		gen.I18n = &gt.Build{
+			Index:  i18nStrings,
 			Origin: mainlang,
 		}
 		deployPath := gen.GetDeployPath()
@@ -323,7 +323,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
  * are inside).
  */
 func (gen *Generator) cleanUnnecessaryPTags(doc *html.HtmlDocument) (err error) {
-	ps, err := doc.Search("//p")
+	ps, err := doc.Search("//p") // ungokogiri
 	if err != nil {
 		return
 	}
@@ -332,7 +332,7 @@ func (gen *Generator) cleanUnnecessaryPTags(doc *html.HtmlDocument) (err error) 
 		child := p.FirstChild()
 		for child != nil {
 			typ := child.NodeType()
-			if typ == xml.XML_TEXT_NODE {
+			if typ == xml.XML_TEXT_NODE { // ungokogiri
 				// Little heuristic to remove nodes with visually empty content.
 				content := strings.TrimSpace(child.Content())
 				if content != "" {
@@ -360,7 +360,7 @@ func (gen *Generator) cleanUnnecessaryPTags(doc *html.HtmlDocument) (err error) 
  * Returns first H1 tag as page title.
  */
 func (gen *Generator) getTitle(doc *html.HtmlDocument) (title string) {
-	result, _ := doc.Search("//h1")
+	result, _ := doc.Search("//h1") // ungokogiri
 	if len(result) > 0 {
 		title = result[0].FirstChild().Content()
 	}
@@ -371,7 +371,7 @@ func (gen *Generator) getTitle(doc *html.HtmlDocument) (title string) {
  * Extracts first HTML commend as map. It expects it as a valid YAML map.
  */
 func (gen *Generator) extractPageConfig(doc *html.HtmlDocument) (config map[interface{}]interface{}, err error) {
-	result, _ := doc.Search("//comment()")
+	result, _ := doc.Search("//comment()") // ungokogiri
 	if len(result) > 0 {
 		_ = yaml.Unmarshal([]byte(result[0].Content()), &config)
 	}
@@ -400,7 +400,7 @@ func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
  * Embeds a Markdown file.
  */
 func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
-	src := e.Attribute("src").Value()
+	src := e.Attribute("src").Value() // ungokogiri
 	mdInput, err := ioutil.ReadFile(src)
 	if err != nil {
 		return err
@@ -428,10 +428,10 @@ func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument, data *ZasData
  * Embeds a plain text file.
  */
 func (gen *Generator) Plain(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
-	src := e.Attribute("src").Value()
+	src := e.Attribute("src").Value() // ungokogiri
 	input, err := ioutil.ReadFile(src)
 	if err != nil {
-		 return err
+		return err
 	}
 	parent := e.Parent()
 	template, err := ttext.New("current").Parse(string(input))
@@ -442,7 +442,7 @@ func (gen *Generator) Plain(e xml.Node, doc *html.HtmlDocument, data *ZasData) (
 	if err = template.Execute(&processed, data); err != nil {
 		return
 	}
-	child := doc.CreateTextNode(string(processed.Bytes()))
+	child := doc.CreateTextNode(string(processed.Bytes())) // ungokogiri
 	parent.AddChild(child)
 	e.Remove()
 	return
@@ -452,10 +452,10 @@ func (gen *Generator) Plain(e xml.Node, doc *html.HtmlDocument, data *ZasData) (
  * Embeds a HTML file.
  */
 func (gen *Generator) Html(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
-	src := e.Attribute("src").Value()
+	src := e.Attribute("src").Value() // ungokogiri
 	input, err := ioutil.ReadFile(src)
 	if err != nil {
-		 return err
+		return err
 	}
 	parent := e.Parent()
 	htmlDoc, err := gen.parseAndReplace(*bytes.NewBuffer(input), data)
@@ -474,7 +474,7 @@ func (gen *Generator) Html(e xml.Node, doc *html.HtmlDocument, data *ZasData) (e
  * They can be handled with MIME type plugins or internal exported methods like Markdown.
  */
 func (gen *Generator) handleEmbedTags(doc *html.HtmlDocument, data *ZasData) (err error) {
-	result, err := doc.Search("//embed")
+	result, err := doc.Search("//embed") // ungokogiri
 	if err != nil {
 		return
 	}
@@ -511,8 +511,8 @@ type bufErr struct {
  * as argument. Subcommand's output is piped to Gokogiri through a buffer.
  */
 func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (err error) {
-	src := e.Attribute("src").Value()
-	typ := e.Attribute("type").Value()
+	src := e.Attribute("src").Value()  // ungokogiri
+	typ := e.Attribute("type").Value() // ungokogiri
 	cmdname := gen.resolveMIMETypePlugin(typ)
 	if cmdname == "" {
 		return
@@ -539,7 +539,7 @@ func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (
 		return be.err
 	}
 	parent := e.Parent()
-	child, err := doc.Coerce(be.buffer)
+	child, err := doc.Coerce(be.buffer) // ungokogiri
 	if err != nil {
 		return
 	}

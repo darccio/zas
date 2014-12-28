@@ -32,18 +32,18 @@ var ZAS_I18N_FILE = filepath.Join(ZAS_DIR, "i18n.yml")
 var ZAS_DIR_CONF_FILE = fmt.Sprintf(".%s.yml", ZAS)
 var ZAS_DEFAULT_DIR_PERM = 0755
 var ZAS_DEFAULT_FILE_PERM = 0644
-var ZAS_DEFAULT_CONF = ConfigSection {
-	ZAS: ConfigSection {
+var ZAS_DEFAULT_CONF = ConfigSection{
+	ZAS: ConfigSection{
 		"layout": filepath.Join(ZAS_DIR, "layout.html"),
 		"deploy": filepath.Join(ZAS_DIR, "deploy"),
 	},
-	"site": ConfigSection {
-		"baseurl": "http://example.com",
+	"site": ConfigSection{
+		"baseurl":  "http://example.com",
 		"language": "en",
 	},
-	"mimetypes": ConfigSection {
+	"mimetypes": ConfigSection{
 		"text/markdown": "markdown",
-		"text/plain": "plain",
-		"text/html": "html",
+		"text/plain":    "plain",
+		"text/html":     "html",
 	},
 }

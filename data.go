@@ -20,10 +20,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/melvinmt/gt"
 	thtml "html/template"
 	"path"
 	"strings"
-	"github.com/melvinmt/gt"
 )
 
 /*
@@ -106,7 +106,7 @@ func (zd *ZasData) Language() (language string) {
 func (zd *ZasData) Resolve(id string) string {
 	var (
 		value interface{}
-		ok bool
+		ok    bool
 	)
 	value, ok = zd.Page[id]
 	if !ok {
