@@ -55,10 +55,15 @@ func NewConfig() (config ConfigSection, err error) {
  */
 func NewI18n(mainlang string) (i18n gt.Strings, err error) {
 	data, err := ioutil.ReadFile(ZAS_I18N_FILE)
+	i18n = make(gt.Strings)
 	if err != nil {
+		if os.IsNotExist(err) {
+			err = nil
+			return
+		}
+		i18n = nil
 		return
 	}
-	i18n = make(gt.Strings)
 	err = yaml.Unmarshal(data, &i18n)
 	for k, v := range i18n {
 		if _, ok := v[mainlang]; !ok {
