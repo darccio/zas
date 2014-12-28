@@ -59,6 +59,12 @@ type Generator struct {
 	I18n *gt.Build
 	// ZasDirectoryConfigs cache
 	cachedZasDirectoryConfigs map[string]ConfigSection
+	// Errors channel for async actions
+	errs chan error
+	// Done channel for async actions
+	done chan bool
+	// Counter for started goroutines
+	expectedFiles int
 }
 
 /*
@@ -113,21 +119,26 @@ func init() {
 		if gen.Config, err = NewConfig(); err != nil {
 			panic(err)
 		}
-		done := make(chan bool)
-		go gen.parseLayout(done)
-		go gen.loadI18N(done)
-		go gen.handleDeployPath(*full, done)
-		for i := 0; i < 3; i++ {
-			<-done
-		}
+		gen.errs = make(chan error)
+		gen.done = make(chan bool)
+		go gen.parseLayout()
+		go gen.loadI18N()
+		go gen.handleDeployPath(*full)
+		gen.wait(3)
 		// Walking function. It allows to bubble up any error from generator.
 		walk := func(path string, info os.FileInfo, err error) error {
 			return gen.walk(path, info, err)
 		}
+		if err := filepath.Walk(".", gen.countwalk); err != nil {
+			panic(err)
+		}
 		if err := filepath.Walk(".", walk); err != nil {
 			panic(err)
 		}
+		gen.wait(gen.expectedFiles)
+		go gen.
 		if !*full {
+			// TODO Can we go parallel?
 			// This removes deleted source files in deploy path
 			reapwalk := func(path string, info os.FileInfo, err error) error {
 				return gen.reaper(path, info, err)
@@ -140,16 +151,25 @@ func init() {
 	cmdGenerate.Init()
 }
 
-func (gen *Generator) parseLayout(done chan bool) {
+/*
+ * Waits for the last N started goroutines.
+ */
+func (gen *Generator) wait(goroutines int) {
+	for i := 0; i < goroutines; i++ {
+		<-gen.done
+	}
+}
+
+func (gen *Generator) parseLayout() {
 	var err error
 	layout := gen.Config.GetZString("layout")
 	if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
 		panic(err)
 	}
-	done <- true
+	gen.done <- true
 }
 
-func (gen *Generator) loadI18N(done chan bool) {
+func (gen *Generator) loadI18N() {
 	mainlang := gen.Config.GetSection("site").GetString("language")
 	i18nStrings, err := NewI18n(mainlang)
 	if err != nil {
@@ -159,10 +179,10 @@ func (gen *Generator) loadI18N(done chan bool) {
 		Index:  i18nStrings,
 		Origin: mainlang,
 	}
-	done <- true
+	gen.done <- true
 }
 
-func (gen *Generator) handleDeployPath(full bool, done chan bool) {
+func (gen *Generator) handleDeployPath(full bool) {
 	deployPath := gen.GetDeployPath()
 	// If deployment path already exists, it must be deleted.
 	if _, err := os.Stat(deployPath); err == nil && full {
@@ -173,7 +193,22 @@ func (gen *Generator) handleDeployPath(full bool, done chan bool) {
 	if err := os.MkdirAll(deployPath, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
 		panic(err)
 	}
-	done <- true
+	gen.done <- true
+}
+
+/*
+ * Count walking function. Counts all files affected by walk().
+ */
+func (gen *Generator) countwalk(path string, info os.FileInfo, err error) (ierr error) {
+	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") {
+		return
+	}
+	if !info.IsDir() {
+		if gen.sourceIsNewer(path, info) {
+			gen.expectedFiles++
+		}
+	}
+	return
 }
 
 /*
@@ -181,7 +216,7 @@ func (gen *Generator) handleDeployPath(full bool, done chan bool) {
  */
 func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error) {
 	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") {
-		return nil
+		return
 	}
 	if info.IsDir() {
 		ierr = os.MkdirAll(gen.BuildDeployPath(path), os.FileMode(ZAS_DEFAULT_DIR_PERM))
@@ -190,18 +225,26 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 			if *verbose {
 				fmt.Println("+", path)
 			}
-			// TODO parallelize with a blocking chan err and another non-blocking exit chan
-			switch {
-			case strings.HasSuffix(path, ".md"):
-				ierr = gen.renderMarkdown(path)
-			case strings.HasSuffix(path, ".html"):
-				ierr = gen.renderHTML(path)
-			default:
-				ierr = gen.copy(gen.BuildDeployPath(path), path)
-			}
+			go gen.renderAsync(path)
 		}
 	}
 	return
+}
+
+func (gen *Generator) renderAsync(path string) {
+	var err error
+	switch {
+	case strings.HasSuffix(path, ".md"):
+		err = gen.renderMarkdown(path)
+	case strings.HasSuffix(path, ".html"):
+		err = gen.renderHTML(path)
+	default:
+		err = gen.copy(gen.BuildDeployPath(path), path)
+	}
+	gen.done <- true
+	if err != nil {
+		gen.errs <- err
+	}
 }
 
 /*
@@ -210,6 +253,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr error) {
 	sourcePath := strings.Replace(path, gen.GetDeployPath(), ".", 1)
 	source, err := os.Open(sourcePath)
+	// TODO it must clean directories too
 	if err != nil {
 		reap := true
 		if strings.HasSuffix(sourcePath, ".html") {
