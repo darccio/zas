@@ -136,7 +136,6 @@ func init() {
 			panic(err)
 		}
 		gen.wait(gen.expectedFiles)
-		go gen.
 		if !*full {
 			// TODO Can we go parallel?
 			// This removes deleted source files in deploy path
