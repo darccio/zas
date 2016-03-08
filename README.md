@@ -238,9 +238,9 @@ Your .zas.yml will look like this, i.e. for Russian (ru):
 
 ## Roadmap
 
-* Better support for non-mime-type plugins
+Check at the planned enhancements [here](https://github.com/imdario/zas/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement).
 
-No more features are currently planned. Feel free to open an issue if you think Zas should do something specific in its core.
+Feel free to open an issue if you think Zas should do something specific in its core.
 
 ## Contact me
 
