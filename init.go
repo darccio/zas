@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"github.com/imdario/mergo"
 	"github.com/melvinmt/gt"
-	yaml "gopkg.in/yaml.v1"
+	yaml "gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"path/filepath"

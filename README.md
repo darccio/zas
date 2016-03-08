@@ -12,9 +12,9 @@ Yes, it is another NIH but... I think Zas is a different kind of beast. I admit 
 
 ### Where is the difference?
 
-1. Gophers. There is [Hastie](https://github.com/mkaz/hastie) too. If you want a blog.
-2. Markdown only. I really like [Mou](http://mouapp.com/).
-3. Just a loop. Zas just loops over all .md and .html files (oh, I told a little lie in #2, my bad - please, bear with me) in current directory (and subdirectories), ignoring all any other file (including dot-files).
+1. Gophers. Yes, there is [Hugo](http://gohugo.io/) (kudos!) but... Who wants to learn another directory layout? There is also [Hastie](https://github.com/mkaz/hastie) too. If you want a blog.
+2. Markdown only. And HTML, if you want.
+3. Just a loop. Zas just loops over all .md and .html files in current directory (and subdirectories), ignoring all any other file (including dot-files).
 4. Your imagination as limit. Zas has a simple extension mechanism based in subcommands. Do you really need to handle a blog with Zas? Install/create a new extension and do it!
 5. Unobstrutive structure, no '_' files. More in [Usage](#usage) section.
 
@@ -22,6 +22,7 @@ Yes, it is another NIH but... I think Zas is a different kind of beast. I admit 
 
 Install:
 
+    # Install libxml2-dev and pkg-config (it works on Linux and Mac OS X, Windows support planned).
     $ go get github.com/imdario/zas
 
 Go to your site's directory and do:

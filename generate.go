@@ -25,7 +25,7 @@ import (
 	"github.com/moovweb/gokogiri/html"
 	"github.com/moovweb/gokogiri/xml"
 	markdown "github.com/russross/blackfriday"
-	yaml "gopkg.in/yaml.v1"
+	yaml "gopkg.in/yaml.v2"
 	thtml "html/template"
 	"io"
 	"io/ioutil"
@@ -117,6 +117,10 @@ func init() {
 			err error
 		)
 		if gen.Config, err = NewConfig(); err != nil {
+			if os.IsNotExist(err) {
+				fmt.Printf("fatal: Not a valid Zas repository: %s\n", err)
+				return
+			}
 			panic(err)
 		}
 		gen.errs = make(chan error)
