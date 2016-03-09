@@ -18,12 +18,11 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"github.com/melvinmt/gt"
-	"github.com/moovweb/gokogiri"
-	"github.com/moovweb/gokogiri/html"
-	"github.com/moovweb/gokogiri/xml"
+	"github.com/bevik/etree"
 	markdown "github.com/russross/blackfriday"
 	yaml "gopkg.in/yaml.v2"
 	thtml "html/template"
@@ -93,13 +92,24 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	if err != nil {
 		return
 	}
-	defer doc.Free()
-	return ioutil.WriteFile(gen.BuildDeployPath(data.Path), []byte(doc.String()), os.FileMode(ZAS_DEFAULT_FILE_PERM))
+	f, err := os.OpenFile(gen.BuildDeployPath(data.Path), O_RDWR|O_CREATE|O_TRUNC, os.FileMode(ZAS_DEFAULT_FILE_PERM))
+	if err != nil {
+		return
+	}
+	w := bufio.NewWriter(f)
+	defer f.Close()
+	defer w.Flush()
+	_, err = doc.WriteTo(w)
+	if err != nil {
+		return
+	}
+	return
 }
 
-func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *html.HtmlDocument, err error) {
+func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *etree.Document, err error) {
 	// Here we manipulate its result.
-	doc, err = gokogiri.ParseHtml(processed.Bytes())
+	doc = etree.NewDocument()
+	err = doc.ReadFrom(processed)
 	if err != nil {
 		return
 	}
@@ -369,7 +379,6 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	if err != nil {
 		return
 	}
-	defer doc.Free()
 	gen.cleanUnnecessaryPTags(doc)
 	data.Page, err = gen.extractPageConfig(doc)
 	if err != nil {
@@ -392,14 +401,14 @@ func (gen *Generator) render(path string, input []byte) (err error) {
  * deleting any <p> without child text nodes (just to avoid deletion if semantic tags
  * are inside).
  */
-func (gen *Generator) cleanUnnecessaryPTags(doc *html.HtmlDocument) (err error) {
-	ps, err := doc.Search("//p") // ungokogiri
+func (gen *Generator) cleanUnnecessaryPTags(doc *etree.Document) (err error) {
+	ps, err := doc.FindElements("//p")
 	if err != nil {
 		return
 	}
 	for _, p := range ps {
 		hasText := false
-		child := p.FirstChild()
+		child := p.FirstChild() // <- TODO
 		for child != nil {
 			typ := child.NodeType()
 			if typ == xml.XML_TEXT_NODE { // ungokogiri
@@ -469,7 +478,7 @@ func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
 /*
  * Embeds a Markdown file.
  */
-func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
+func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) { // <- TODO
 	src := e.Attribute("src").Value() // ungokogiri
 	mdInput, err := ioutil.ReadFile(src)
 	if err != nil {
@@ -497,7 +506,7 @@ func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument, data *ZasData
 /*
  * Embeds a plain text file.
  */
-func (gen *Generator) Plain(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
+func (gen *Generator) Plain(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) { // <- TODO
 	src := e.Attribute("src").Value() // ungokogiri
 	input, err := ioutil.ReadFile(src)
 	if err != nil {
@@ -513,15 +522,15 @@ func (gen *Generator) Plain(e xml.Node, doc *html.HtmlDocument, data *ZasData) (
 		return
 	}
 	child := doc.CreateTextNode(string(processed.Bytes())) // ungokogiri
-	parent.AddChild(child)
-	e.Remove()
+	gen.appendChildren(parent, child)
+	parent.RemoveElement(e)
 	return
 }
 
 /*
  * Embeds a HTML file.
  */
-func (gen *Generator) Html(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
+func (gen *Generator) Html(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) { // <- TODO
 	src := e.Attribute("src").Value() // ungokogiri
 	input, err := ioutil.ReadFile(src)
 	if err != nil {
@@ -529,12 +538,12 @@ func (gen *Generator) Html(e xml.Node, doc *html.HtmlDocument, data *ZasData) (e
 	}
 	parent := e.Parent()
 	htmlDoc, err := gen.parseAndReplace(*bytes.NewBuffer(input), data)
-	nodes, err := parent.Coerce(htmlDoc.String())
+	nodes, err := gen.coerce(htmlDoc.WriteToBytes())
 	if err != nil {
 		return err
 	}
-	parent.AddChild(nodes)
-	e.Remove()
+	gen.appendChildren(parent, nodes)
+	parent.RemoveElement(e)
 	return
 }
 
@@ -543,13 +552,13 @@ func (gen *Generator) Html(e xml.Node, doc *html.HtmlDocument, data *ZasData) (e
  *
  * They can be handled with MIME type plugins or internal exported methods like Markdown.
  */
-func (gen *Generator) handleEmbedTags(doc *html.HtmlDocument, data *ZasData) (err error) {
-	result, err := doc.Search("//embed") // ungokogiri
+func (gen *Generator) handleEmbedTags(doc *etree.Document, data *ZasData) (err error) {
+	result, err := doc.FindElements("//embed")
 	if err != nil {
 		return
 	}
 	for _, e := range result {
-		plugin := gen.resolveMIMETypePlugin(e.Attribute("type").Value())
+		plugin := gen.resolveMIMETypePlugin(e.SelectAttribute("type").Value)
 		method := reflect.ValueOf(gen).MethodByName(strings.Title(plugin))
 		if method == reflect.ValueOf(nil) {
 			err = gen.handleMIMETypePlugin(e, doc)
@@ -580,9 +589,9 @@ type bufErr struct {
  * Invokes a MIME type plugin based on current node's type attribute, passing src attribute's value
  * as argument. Subcommand's output is piped to Gokogiri through a buffer.
  */
-func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (err error) {
-	src := e.Attribute("src").Value()  // ungokogiri
-	typ := e.Attribute("type").Value() // ungokogiri
+func (gen *Generator) handleMIMETypePlugin(e *etree.Element, doc *html.HtmlDocument) (err error) {
+	src := e.SelectAttribute("src").Value
+	typ := e.SelectAttribute("type").Value
 	cmdname := gen.resolveMIMETypePlugin(typ)
 	if cmdname == "" {
 		return
@@ -608,14 +617,32 @@ func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (
 	if be.err != nil {
 		return be.err
 	}
-	parent := e.Parent()
-	child, err := doc.Coerce(be.buffer) // ungokogiri
+	parent := e.Parent
+	child, err := gen.coerce(be.buffer)
 	if err != nil {
 		return
 	}
-	parent.AddChild(child)
-	e.Remove()
+	gen.appenChildren(parent, child)
+	parent.RemoveElement(e)
 	return
+}
+
+func (gen *Generator) coerce(data byte[]) (els []*Element, err error) {
+	doc := etree.NewDocument()
+	err = doc.ReadFromBytes(data)
+	if err != nil {
+		return
+	}
+	els = doc.ChildElements()
+	return
+}
+
+func (gen *Generator) appendChildren(parent *Element, children []*Element) {
+	tokens := make([]Token, len(children))
+	for ix, child := range children {
+		tokens[ix] = child.(Token)
+	}
+	parent.Child = append(parent.Child, tokens...)
 }
 
 /*
