@@ -21,7 +21,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/bevik/etree"
+	"github.com/beevik/etree"
 	"github.com/melvinmt/gt"
 	markdown "github.com/russross/blackfriday"
 	yaml "gopkg.in/yaml.v2"
