@@ -92,7 +92,7 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	if err != nil {
 		return
 	}
-	f, err := os.OpenFile(gen.BuildDeployPath(data.Path), O_RDWR|O_CREATE|O_TRUNC, os.FileMode(ZAS_DEFAULT_FILE_PERM))
+	f, err := os.OpenFile(gen.BuildDeployPath(data.Path), os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.FileMode(ZAS_DEFAULT_FILE_PERM))
 	if err != nil {
 		return
 	}
@@ -109,7 +109,7 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *etree.Document, err error) {
 	// Here we manipulate its result.
 	doc = etree.NewDocument()
-	err = doc.ReadFrom(processed)
+	_, err = doc.ReadFrom(processed)
 	if err != nil {
 		return
 	}
@@ -386,7 +386,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 		err = nil
 	}
 	data.FirstTitle = gen.getTitle(doc)
-	body, err := doc.FindElements("//body")
+	body := doc.FindElements("//body")
 	if err != nil {
 		return
 	}
@@ -407,7 +407,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
  * are inside).
  */
 func (gen *Generator) cleanUnnecessaryPTags(doc *etree.Document) (err error) {
-	ps, err := doc.FindElements("//p")
+	ps := doc.FindElements("//p")
 	if err != nil {
 		return
 	}
@@ -439,7 +439,7 @@ func (gen *Generator) cleanUnnecessaryPTags(doc *etree.Document) (err error) {
  * Returns first H1 tag as page title.
  */
 func (gen *Generator) getTitle(doc *etree.Document) (title string) {
-	result, _ := doc.FindElements("//h1")
+	result := doc.FindElements("//h1")
 	if len(result) > 0 {
 		title = result[0].Child[0].Text()
 	}
@@ -485,7 +485,7 @@ func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
  * Embeds a Markdown file.
  */
 func (gen *Generator) Markdown(e *etree.Element, doc *etree.Document, data *ZasData) (err error) {
-	src := e.SelectAttribute("src").Value
+	src := e.SelectAttr("src").Value
 	mdInput, err := ioutil.ReadFile(src)
 	if err != nil {
 		return err
@@ -509,7 +509,7 @@ func (gen *Generator) Markdown(e *etree.Element, doc *etree.Document, data *ZasD
  * Embeds a plain text file.
  */
 func (gen *Generator) Plain(e *etree.Element, doc *etree.Document, data *ZasData) (err error) {
-	src := e.SelectAttribute("src").Value
+	src := e.SelectAttr("src").Value
 	input, err := ioutil.ReadFile(src)
 	if err != nil {
 		return err
@@ -532,16 +532,20 @@ func (gen *Generator) Plain(e *etree.Element, doc *etree.Document, data *ZasData
  * Embeds a HTML file.
  */
 func (gen *Generator) Html(e *etree.Element, doc *etree.Document, data *ZasData) (err error) {
-	src := e.SelectAttribute("src").Value
+	src := e.SelectAttr("src").Value
 	input, err := ioutil.ReadFile(src)
 	if err != nil {
 		return err
 	}
-	parent := e.Parent()
+	parent := e.Parent
 	htmlDoc, err := gen.parseAndReplace(*bytes.NewBuffer(input), data)
-	nodes, err := gen.coerce(htmlDoc.WriteToBytes())
+	bhtml, err := htmlDoc.WriteToBytes()
 	if err != nil {
-		return err
+		return
+	}
+	nodes, err := gen.coerce(bhtml)
+	if err != nil {
+		return
 	}
 	gen.appendChildren(parent, nodes)
 	parent.RemoveElement(e)
@@ -554,12 +558,12 @@ func (gen *Generator) Html(e *etree.Element, doc *etree.Document, data *ZasData)
  * They can be handled with MIME type plugins or internal exported methods like Markdown.
  */
 func (gen *Generator) handleEmbedTags(doc *etree.Document, data *ZasData) (err error) {
-	result, err := doc.FindElements("//embed")
+	result := doc.FindElements("//embed")
 	if err != nil {
 		return
 	}
 	for _, e := range result {
-		plugin := gen.resolveMIMETypePlugin(e.SelectAttribute("type").Value)
+		plugin := gen.resolveMIMETypePlugin(e.SelectAttr("type").Value)
 		method := reflect.ValueOf(gen).MethodByName(strings.Title(plugin))
 		if method == reflect.ValueOf(nil) {
 			err = gen.handleMIMETypePlugin(e, doc)
@@ -591,8 +595,8 @@ type bufErr struct {
  * as argument. Subcommand's output is piped to Gokogiri through a buffer.
  */
 func (gen *Generator) handleMIMETypePlugin(e *etree.Element, doc *etree.Document) (err error) {
-	src := e.SelectAttribute("src").Value
-	typ := e.SelectAttribute("type").Value
+	src := e.SelectAttr("src").Value
+	typ := e.SelectAttr("type").Value
 	cmdname := gen.resolveMIMETypePlugin(typ)
 	if cmdname == "" {
 		return
@@ -628,7 +632,7 @@ func (gen *Generator) handleMIMETypePlugin(e *etree.Element, doc *etree.Document
 	return
 }
 
-func (gen *Generator) coerce(data []byte) (els []*Element, err error) {
+func (gen *Generator) coerce(data []byte) (els []*etree.Element, err error) {
 	doc := etree.NewDocument()
 	err = doc.ReadFromBytes(data)
 	if err != nil {
@@ -638,8 +642,8 @@ func (gen *Generator) coerce(data []byte) (els []*Element, err error) {
 	return
 }
 
-func (gen *Generator) appendChildren(parent *Element, children []*Element) {
-	tokens := make([]Token, len(children))
+func (gen *Generator) appendChildren(parent *etree.Element, children []*etree.Element) {
+	tokens := make([]etree.Token, len(children))
 	for ix, child := range children {
 		tokens[ix] = child.(Token)
 	}
