@@ -21,11 +21,12 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/melvinmt/gt"
-	"github.com/moovweb/gokogiri"
-	"github.com/moovweb/gokogiri/html"
-	"github.com/moovweb/gokogiri/xml"
+	"github.com/PuerkitoBio/goquery"
 	markdown "github.com/russross/blackfriday"
+	html5 "golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 	yaml "gopkg.in/yaml.v2"
+	"html"
 	thtml "html/template"
 	"io"
 	"io/ioutil"
@@ -93,13 +94,21 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	if err != nil {
 		return
 	}
-	defer doc.Free()
-	return ioutil.WriteFile(gen.BuildDeployPath(data.Path), []byte(doc.String()), os.FileMode(ZAS_DEFAULT_FILE_PERM))
+	f, err := os.OpenFile(gen.BuildDeployPath(data.Path), os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.FileMode(ZAS_DEFAULT_FILE_PERM))
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	err = html5.Render(f, doc.Get(0))
+	if err != nil {
+		return
+	}
+	return
 }
 
-func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *html.HtmlDocument, err error) {
+func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *goquery.Document, err error) {
 	// Here we manipulate its result.
-	doc, err = gokogiri.ParseHtml(processed.Bytes())
+	doc, err = goquery.NewDocumentFromReader(&processed)
 	if err != nil {
 		return
 	}
@@ -133,6 +142,7 @@ func init() {
 		walk := func(path string, info os.FileInfo, err error) error {
 			return gen.walk(path, info, err)
 		}
+		// TODO optimize for lesser hits on disk
 		if err := filepath.Walk(".", gen.countwalk); err != nil {
 			panic(err)
 		}
@@ -157,10 +167,19 @@ func init() {
 /*
  * Waits for the last N started goroutines.
  */
-func (gen *Generator) wait(goroutines int) {
+func (gen *Generator) wait(goroutines int) (err error) {
 	for i := 0; i < goroutines; i++ {
-		<-gen.done
+		select {
+		case <-gen.done:
+			// NOOP
+		case err = <-gen.errs:
+			// TODO improve error handling showing which file caused a given error
+			if err != nil {
+				return
+			}
+		}
 	}
+	return
 }
 
 func (gen *Generator) parseLayout() {
@@ -244,10 +263,10 @@ func (gen *Generator) renderAsync(path string) {
 	default:
 		err = gen.copy(gen.BuildDeployPath(path), path)
 	}
-	gen.done <- true
 	if err != nil {
 		gen.errs <- err
 	}
+	gen.done <- true
 }
 
 /*
@@ -305,7 +324,9 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
 	if err != nil {
 		return
 	}
-	md := markdown.MarkdownCommon(input)
+	// This is going to haunt me for a while.
+	intermediate := string(markdown.MarkdownCommon(input))
+	md := []byte(html.UnescapeString(intermediate))
 	return gen.render(path, md)
 }
 
@@ -367,9 +388,9 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	}
 	doc, err := gen.parseAndReplace(processed, &data)
 	if err != nil {
+		fmt.Println(err)
 		return
 	}
-	defer doc.Free()
 	gen.cleanUnnecessaryPTags(doc)
 	data.Page, err = gen.extractPageConfig(doc)
 	if err != nil {
@@ -377,12 +398,17 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 		err = nil
 	}
 	data.FirstTitle = gen.getTitle(doc)
-	body, err := doc.Search("//body")
+	body := doc.Find(atom.Body.String())
 	if err != nil {
 		return
 	}
-	if len(body) > 0 {
-		data.Body = thtml.HTML(body[0].InnerHtml())
+	if body.Size() > 0 {
+		var bbody bytes.Buffer
+		err = html5.Render(&bbody, body.Get(0))
+		if err != nil {
+			return
+		}
+		data.Body = thtml.HTML(bbody.Bytes())
 	}
 	return gen.Generate(path, &data)
 }
@@ -392,47 +418,29 @@ func (gen *Generator) render(path string, input []byte) (err error) {
  * deleting any <p> without child text nodes (just to avoid deletion if semantic tags
  * are inside).
  */
-func (gen *Generator) cleanUnnecessaryPTags(doc *html.HtmlDocument) (err error) {
-	ps, err := doc.Search("//p") // ungokogiri
-	if err != nil {
-		return
-	}
-	for _, p := range ps {
+func (gen *Generator) cleanUnnecessaryPTags(doc *goquery.Document) {
+	doc.Find(atom.P.String()).Each(func (ix int, p *goquery.Selection) {
 		hasText := false
-		child := p.FirstChild()
-		for child != nil {
-			typ := child.NodeType()
-			if typ == xml.XML_TEXT_NODE { // ungokogiri
-				// Little heuristic to remove nodes with visually empty content.
-				content := strings.TrimSpace(child.Content())
-				if content != "" {
-					hasText = true
-					break
-				}
-			}
-			child = child.NextSibling()
+		// Little heuristic to remove nodes with visually empty content.
+		content := strings.TrimSpace(p.Nodes[0].Data)
+		if content != "" {
+			hasText = true
 		}
 		// If current <p> tag doesn't have any child text node, extract children and add to its parent.
 		if !hasText {
-			parent := p.Parent()
-			child = p.FirstChild()
-			for child != nil {
-				parent.AddChild(child)
-				child = child.NextSibling()
-			}
-			p.Remove()
+			p.ReplaceWithSelection(p.Children())
 		}
-	}
+	})
 	return
 }
 
 /*
  * Returns first H1 tag as page title.
  */
-func (gen *Generator) getTitle(doc *html.HtmlDocument) (title string) {
-	result, _ := doc.Search("//h1") // ungokogiri
-	if len(result) > 0 {
-		title = result[0].FirstChild().Content()
+func (gen *Generator) getTitle(doc *goquery.Document) (title string) {
+	result := doc.Find(atom.H1.String())
+	if result.Size() > 0 {
+		title = result.First().Text()
 	}
 	return
 }
@@ -440,10 +448,16 @@ func (gen *Generator) getTitle(doc *html.HtmlDocument) (title string) {
 /*
  * Extracts first HTML commend as map. It expects it as a valid YAML map.
  */
-func (gen *Generator) extractPageConfig(doc *html.HtmlDocument) (config map[interface{}]interface{}, err error) {
-	result, _ := doc.Search("//comment()") // ungokogiri
-	if len(result) > 0 {
-		_ = yaml.Unmarshal([]byte(result[0].Content()), &config)
+func (gen *Generator) extractPageConfig(doc *goquery.Document) (config map[interface{}]interface{}, err error) {
+	var comment *html5.Node
+	for _, child := range doc.Nodes {
+		if child.Type == html5.CommentNode {
+			comment = child
+			break
+		}
+	}
+	if comment != nil {
+		_ = yaml.Unmarshal([]byte(comment.Data), &config)
 	}
 	return
 }
@@ -469,72 +483,64 @@ func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
 /*
  * Embeds a Markdown file.
  */
-func (gen *Generator) Markdown(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
-	src := e.Attribute("src").Value() // ungokogiri
-	mdInput, err := ioutil.ReadFile(src)
-	if err != nil {
-		return err
+func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
+	if src, ok := e.Attr(atom.Src.String()); ok {
+		mdInput, err := ioutil.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		md := markdown.MarkdownCommon(mdInput)
+		mdDoc, err := gen.parseAndReplace(*bytes.NewBuffer(md), data)
+		if err != nil {
+			return err
+		}
+		e.ReplaceWithSelection(mdDoc.Find(atom.Body.String()))
 	}
-	md := markdown.MarkdownCommon(mdInput)
-	mdDoc, err := gen.parseAndReplace(*bytes.NewBuffer(md), data)
-	if err != nil {
-		return err
-	}
-	partial, err := mdDoc.Search("//body")
-	if err != nil {
-		return err
-	}
-	parent := e.Parent()
-	child := partial[0].FirstChild()
-	for child != nil {
-		parent.AddChild(child)
-		child = child.NextSibling()
-	}
-	e.Remove()
 	return
 }
 
 /*
  * Embeds a plain text file.
  */
-func (gen *Generator) Plain(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
-	src := e.Attribute("src").Value() // ungokogiri
-	input, err := ioutil.ReadFile(src)
-	if err != nil {
-		return err
+func (gen *Generator) Plain(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
+	if src, ok := e.Attr(atom.Src.String()); ok {
+		var input []byte
+		input, err = ioutil.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		var template *ttext.Template
+		template, err = ttext.New("current").Parse(string(input))
+		if err != nil {
+			return
+		}
+		var processed bytes.Buffer
+		if err = template.Execute(&processed, data); err != nil {
+			return
+		}
+		e.Parent().Nodes[0].Data = string(processed.Bytes())
+		e.Remove()
 	}
-	parent := e.Parent()
-	template, err := ttext.New("current").Parse(string(input))
-	if err != nil {
-		return
-	}
-	var processed bytes.Buffer
-	if err = template.Execute(&processed, data); err != nil {
-		return
-	}
-	child := doc.CreateTextNode(string(processed.Bytes())) // ungokogiri
-	parent.AddChild(child)
-	e.Remove()
 	return
 }
 
 /*
  * Embeds a HTML file.
  */
-func (gen *Generator) Html(e xml.Node, doc *html.HtmlDocument, data *ZasData) (err error) {
-	src := e.Attribute("src").Value() // ungokogiri
-	input, err := ioutil.ReadFile(src)
-	if err != nil {
-		return err
+func (gen *Generator) Html(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
+	if src, ok := e.Attr(atom.Src.String()); ok {
+		var input []byte
+		input, err = ioutil.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		var htmlDoc *goquery.Document
+		htmlDoc, err = gen.parseAndReplace(*bytes.NewBuffer(input), data)
+		if err != nil {
+			return
+		}
+		e.ReplaceWithSelection(htmlDoc.Children())
 	}
-	parent := e.Parent()
-	htmlDoc, err := gen.parseAndReplace(*bytes.NewBuffer(input), data)
-	nodes, err := parent.Coerce(htmlDoc.String())
-	if err != nil {
-		return err
-	}
-	parent.AddChild(nodes)
-	e.Remove()
 	return
 }
 
@@ -543,31 +549,30 @@ func (gen *Generator) Html(e xml.Node, doc *html.HtmlDocument, data *ZasData) (e
  *
  * They can be handled with MIME type plugins or internal exported methods like Markdown.
  */
-func (gen *Generator) handleEmbedTags(doc *html.HtmlDocument, data *ZasData) (err error) {
-	result, err := doc.Search("//embed") // ungokogiri
-	if err != nil {
-		return
-	}
-	for _, e := range result {
-		plugin := gen.resolveMIMETypePlugin(e.Attribute("type").Value())
-		method := reflect.ValueOf(gen).MethodByName(strings.Title(plugin))
-		if method == reflect.ValueOf(nil) {
-			err = gen.handleMIMETypePlugin(e, doc)
-		} else {
-			args := make([]reflect.Value, 3)
-			args[0] = reflect.ValueOf(e)
-			args[1] = reflect.ValueOf(doc)
-			args[2] = reflect.ValueOf(data)
-			r := method.Call(args)
-			rerr := r[0].Interface()
-			if ierr, ok := rerr.(error); ok {
-				err = ierr
+func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err error) {
+	doc.Find(atom.Embed.String()).EachWithBreak(func (ix int, e *goquery.Selection) bool {
+		if src, ok := e.Attr(atom.Src.String()); ok {
+			plugin := gen.resolveMIMETypePlugin(src)
+			method := reflect.ValueOf(gen).MethodByName(strings.Title(plugin))
+			if method == reflect.ValueOf(nil) {
+				err = gen.handleMIMETypePlugin(e, doc)
+			} else {
+				args := make([]reflect.Value, 2)
+				args[0] = reflect.ValueOf(e)
+				args[1] = reflect.ValueOf(doc)
+				args[2] = reflect.ValueOf(data)
+				r := method.Call(args)
+				rerr := r[0].Interface()
+				if ierr, ok := rerr.(error); ok {
+					err = ierr
+				}
+			}
+			if err != nil {
+				return false
 			}
 		}
-		if err != nil {
-			return
-		}
-	}
+		return true
+	})
 	return
 }
 
@@ -580,9 +585,17 @@ type bufErr struct {
  * Invokes a MIME type plugin based on current node's type attribute, passing src attribute's value
  * as argument. Subcommand's output is piped to Gokogiri through a buffer.
  */
-func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (err error) {
-	src := e.Attribute("src").Value()  // ungokogiri
-	typ := e.Attribute("type").Value() // ungokogiri
+func (gen *Generator) handleMIMETypePlugin(e *goquery.Selection, doc *goquery.Document) (err error) {
+	var (
+		src, typ string
+		ok bool
+	)
+	if src, ok = e.Attr(atom.Src.String()); ok {
+		return
+	}
+	if typ, ok = e.Attr(atom.Type.String()); ok {
+		return
+	}
 	cmdname := gen.resolveMIMETypePlugin(typ)
 	if cmdname == "" {
 		return
@@ -608,13 +621,7 @@ func (gen *Generator) handleMIMETypePlugin(e xml.Node, doc *html.HtmlDocument) (
 	if be.err != nil {
 		return be.err
 	}
-	parent := e.Parent()
-	child, err := doc.Coerce(be.buffer) // ungokogiri
-	if err != nil {
-		return
-	}
-	parent.AddChild(child)
-	e.Remove()
+	e.ReplaceWithHtml(string(be.buffer))
 	return
 }
 
@@ -625,8 +632,8 @@ func (gen *Generator) resolveMIMETypePlugin(typ string) string {
 	return gen.Config.GetSection("mimetypes").GetString(typ)
 }
 
-func noescape(text string) thtml.HTML {
-	return thtml.HTML(text)
+func noescape(data string) thtml.HTML {
+	return thtml.HTML(data)
 }
 
 func eq(a, b interface{}) bool {
