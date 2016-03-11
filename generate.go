@@ -25,6 +25,7 @@ import (
 	"github.com/melvinmt/gt"
 	markdown "github.com/russross/blackfriday"
 	yaml "gopkg.in/yaml.v2"
+	"html"
 	thtml "html/template"
 	"io"
 	"io/ioutil"
@@ -109,7 +110,7 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *etree.Document, err error) {
 	// Here we manipulate its result.
 	doc = etree.NewDocument()
-	_, err = doc.ReadFrom(processed)
+	_, err = doc.ReadFrom(&processed)
 	if err != nil {
 		return
 	}
@@ -143,6 +144,7 @@ func init() {
 		walk := func(path string, info os.FileInfo, err error) error {
 			return gen.walk(path, info, err)
 		}
+		// TODO optimize for lesser hits on disk
 		if err := filepath.Walk(".", gen.countwalk); err != nil {
 			panic(err)
 		}
@@ -167,10 +169,19 @@ func init() {
 /*
  * Waits for the last N started goroutines.
  */
-func (gen *Generator) wait(goroutines int) {
+func (gen *Generator) wait(goroutines int) (err error) {
 	for i := 0; i < goroutines; i++ {
-		<-gen.done
+		select {
+		case <-gen.done:
+			// NOOP
+		case err = <-gen.errs:
+			// TODO improve error handling showing which file caused a given error
+			if err != nil {
+				return
+			}
+		}
 	}
+	return
 }
 
 func (gen *Generator) parseLayout() {
@@ -254,10 +265,10 @@ func (gen *Generator) renderAsync(path string) {
 	default:
 		err = gen.copy(gen.BuildDeployPath(path), path)
 	}
-	gen.done <- true
 	if err != nil {
 		gen.errs <- err
 	}
+	gen.done <- true
 }
 
 /*
@@ -315,7 +326,9 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
 	if err != nil {
 		return
 	}
-	md := markdown.MarkdownCommon(input)
+	// This is going to haunt me for a while.
+	intermediate := string(markdown.MarkdownCommon(input))
+	md := []byte(html.UnescapeString(intermediate))
 	return gen.render(path, md)
 }
 
@@ -377,6 +390,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	}
 	doc, err := gen.parseAndReplace(processed, &data)
 	if err != nil {
+		fmt.Println(err)
 		return
 	}
 	gen.cleanUnnecessaryPTags(doc)
@@ -392,7 +406,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	}
 	if len(body) > 0 {
 		var bbody bytes.Buffer
-		_, err = body[0].WriteTo(bbody)
+		_, err = etree.CreateDocument(body[0]).WriteTo(&bbody)
 		if err != nil {
 			return
 		}
@@ -413,7 +427,7 @@ func (gen *Generator) cleanUnnecessaryPTags(doc *etree.Document) (err error) {
 	}
 	for _, p := range ps {
 		hasText := false
-		for child := range p.Child {
+		for _, child := range p.Child {
 			if cd, ok := child.(*etree.CharData); ok {
 				// Little heuristic to remove nodes with visually empty content.
 				content := strings.TrimSpace(cd.Data)
@@ -426,7 +440,7 @@ func (gen *Generator) cleanUnnecessaryPTags(doc *etree.Document) (err error) {
 		// If current <p> tag doesn't have any child text node, extract children and add to its parent.
 		if !hasText {
 			parent := p.Parent
-			for child := range p.Child {
+			for _, child := range p.Child {
 				parent.Child = append(parent.Child, child)
 			}
 			parent.RemoveElement(p)
@@ -441,7 +455,8 @@ func (gen *Generator) cleanUnnecessaryPTags(doc *etree.Document) (err error) {
 func (gen *Generator) getTitle(doc *etree.Document) (title string) {
 	result := doc.FindElements("//h1")
 	if len(result) > 0 {
-		title = result[0].Child[0].Text()
+		e := result[0].Child[0].(*etree.CharData)
+		title = e.Data
 	}
 	return
 }
@@ -451,7 +466,7 @@ func (gen *Generator) getTitle(doc *etree.Document) (title string) {
  */
 func (gen *Generator) extractPageConfig(doc *etree.Document) (config map[interface{}]interface{}, err error) {
 	var comment *etree.Comment
-	for child := range doc.Child {
+	for _, child := range doc.Child {
 		if c, ok := child.(*etree.Comment); ok {
 			comment = c
 			break
@@ -490,17 +505,16 @@ func (gen *Generator) Markdown(e *etree.Element, doc *etree.Document, data *ZasD
 	if err != nil {
 		return err
 	}
-	md := markdown.MarkdownCommon(mdInput)
+	// This is going to haunt me for a while too.
+	intermediate := string(markdown.MarkdownCommon(mdInput))
+	md := []byte(html.UnescapeString(intermediate))
 	mdDoc, err := gen.parseAndReplace(*bytes.NewBuffer(md), data)
 	if err != nil {
 		return err
 	}
-	partial, err := mdDoc.FindElements("//body")
-	if err != nil {
-		return err
-	}
 	parent := e.Parent
-	gen.appendChildren(parent, partial[0].Child)
+	partial := mdDoc.FindElements("//body")
+	parent.Child = append(parent.Child, partial[0].Child...)
 	parent.RemoveElement(e)
 	return
 }
@@ -645,7 +659,7 @@ func (gen *Generator) coerce(data []byte) (els []*etree.Element, err error) {
 func (gen *Generator) appendChildren(parent *etree.Element, children []*etree.Element) {
 	tokens := make([]etree.Token, len(children))
 	for ix, child := range children {
-		tokens[ix] = child.(Token)
+		tokens[ix] = child
 	}
 	parent.Child = append(parent.Child, tokens...)
 }
@@ -657,8 +671,8 @@ func (gen *Generator) resolveMIMETypePlugin(typ string) string {
 	return gen.Config.GetSection("mimetypes").GetString(typ)
 }
 
-func noescape(text string) thtml.HTML {
-	return thtml.HTML(text)
+func noescape(data string) thtml.HTML {
+	return thtml.HTML(data)
 }
 
 func eq(a, b interface{}) bool {
