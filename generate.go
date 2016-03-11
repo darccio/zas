@@ -18,12 +18,13 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/beevik/etree"
 	"github.com/melvinmt/gt"
+	"github.com/PuerkitoBio/goquery"
 	markdown "github.com/russross/blackfriday"
+	html5 "golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 	yaml "gopkg.in/yaml.v2"
 	"html"
 	thtml "html/template"
@@ -97,20 +98,17 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	if err != nil {
 		return
 	}
-	w := bufio.NewWriter(f)
 	defer f.Close()
-	defer w.Flush()
-	_, err = doc.WriteTo(w)
+	err = html5.Render(f, doc.Get(0))
 	if err != nil {
 		return
 	}
 	return
 }
 
-func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *etree.Document, err error) {
+func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *goquery.Document, err error) {
 	// Here we manipulate its result.
-	doc = etree.NewDocument()
-	_, err = doc.ReadFrom(&processed)
+	doc, err = goquery.NewDocumentFromReader(&processed)
 	if err != nil {
 		return
 	}
@@ -400,13 +398,13 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 		err = nil
 	}
 	data.FirstTitle = gen.getTitle(doc)
-	body := doc.FindElements("//body")
+	body := doc.Find(atom.Body.String())
 	if err != nil {
 		return
 	}
-	if len(body) > 0 {
+	if body.Size() > 0 {
 		var bbody bytes.Buffer
-		_, err = etree.CreateDocument(body[0]).WriteTo(&bbody)
+		err = html5.Render(&bbody, body.Get(0))
 		if err != nil {
 			return
 		}
@@ -420,43 +418,29 @@ func (gen *Generator) render(path string, input []byte) (err error) {
  * deleting any <p> without child text nodes (just to avoid deletion if semantic tags
  * are inside).
  */
-func (gen *Generator) cleanUnnecessaryPTags(doc *etree.Document) (err error) {
-	ps := doc.FindElements("//p")
-	if err != nil {
-		return
-	}
-	for _, p := range ps {
+func (gen *Generator) cleanUnnecessaryPTags(doc *goquery.Document) {
+	doc.Find(atom.P.String()).Each(func (ix int, p *goquery.Selection) {
 		hasText := false
-		for _, child := range p.Child {
-			if cd, ok := child.(*etree.CharData); ok {
-				// Little heuristic to remove nodes with visually empty content.
-				content := strings.TrimSpace(cd.Data)
-				if content != "" {
-					hasText = true
-					break
-				}
-			}
+		// Little heuristic to remove nodes with visually empty content.
+		content := strings.TrimSpace(p.Nodes[0].Data)
+		if content != "" {
+			hasText = true
 		}
 		// If current <p> tag doesn't have any child text node, extract children and add to its parent.
 		if !hasText {
-			parent := p.Parent
-			for _, child := range p.Child {
-				parent.Child = append(parent.Child, child)
-			}
-			parent.RemoveElement(p)
+			p.ReplaceWithSelection(p.Children())
 		}
-	}
+	})
 	return
 }
 
 /*
  * Returns first H1 tag as page title.
  */
-func (gen *Generator) getTitle(doc *etree.Document) (title string) {
-	result := doc.FindElements("//h1")
-	if len(result) > 0 {
-		e := result[0].Child[0].(*etree.CharData)
-		title = e.Data
+func (gen *Generator) getTitle(doc *goquery.Document) (title string) {
+	result := doc.Find(atom.H1.String())
+	if result.Size() > 0 {
+		title = result.First().Text()
 	}
 	return
 }
@@ -464,11 +448,11 @@ func (gen *Generator) getTitle(doc *etree.Document) (title string) {
 /*
  * Extracts first HTML commend as map. It expects it as a valid YAML map.
  */
-func (gen *Generator) extractPageConfig(doc *etree.Document) (config map[interface{}]interface{}, err error) {
-	var comment *etree.Comment
-	for _, child := range doc.Child {
-		if c, ok := child.(*etree.Comment); ok {
-			comment = c
+func (gen *Generator) extractPageConfig(doc *goquery.Document) (config map[interface{}]interface{}, err error) {
+	var comment *html5.Node
+	for _, child := range doc.Nodes {
+		if child.Type == html5.CommentNode {
+			comment = child
 			break
 		}
 	}
@@ -499,70 +483,64 @@ func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
 /*
  * Embeds a Markdown file.
  */
-func (gen *Generator) Markdown(e *etree.Element, doc *etree.Document, data *ZasData) (err error) {
-	src := e.SelectAttr("src").Value
-	mdInput, err := ioutil.ReadFile(src)
-	if err != nil {
-		return err
+func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
+	if src, ok := e.Attr(atom.Src.String()); ok {
+		mdInput, err := ioutil.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		md := markdown.MarkdownCommon(mdInput)
+		mdDoc, err := gen.parseAndReplace(*bytes.NewBuffer(md), data)
+		if err != nil {
+			return err
+		}
+		e.ReplaceWithSelection(mdDoc.Find(atom.Body.String()))
 	}
-	// This is going to haunt me for a while too.
-	intermediate := string(markdown.MarkdownCommon(mdInput))
-	md := []byte(html.UnescapeString(intermediate))
-	mdDoc, err := gen.parseAndReplace(*bytes.NewBuffer(md), data)
-	if err != nil {
-		return err
-	}
-	parent := e.Parent
-	partial := mdDoc.FindElements("//body")
-	parent.Child = append(parent.Child, partial[0].Child...)
-	parent.RemoveElement(e)
 	return
 }
 
 /*
  * Embeds a plain text file.
  */
-func (gen *Generator) Plain(e *etree.Element, doc *etree.Document, data *ZasData) (err error) {
-	src := e.SelectAttr("src").Value
-	input, err := ioutil.ReadFile(src)
-	if err != nil {
-		return err
+func (gen *Generator) Plain(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
+	if src, ok := e.Attr(atom.Src.String()); ok {
+		var input []byte
+		input, err = ioutil.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		var template *ttext.Template
+		template, err = ttext.New("current").Parse(string(input))
+		if err != nil {
+			return
+		}
+		var processed bytes.Buffer
+		if err = template.Execute(&processed, data); err != nil {
+			return
+		}
+		e.Parent().Nodes[0].Data = string(processed.Bytes())
+		e.Remove()
 	}
-	template, err := ttext.New("current").Parse(string(input))
-	if err != nil {
-		return
-	}
-	var processed bytes.Buffer
-	if err = template.Execute(&processed, data); err != nil {
-		return
-	}
-	parent := e.Parent
-	parent.CreateCharData(string(processed.Bytes()))
-	parent.RemoveElement(e)
 	return
 }
 
 /*
  * Embeds a HTML file.
  */
-func (gen *Generator) Html(e *etree.Element, doc *etree.Document, data *ZasData) (err error) {
-	src := e.SelectAttr("src").Value
-	input, err := ioutil.ReadFile(src)
-	if err != nil {
-		return err
+func (gen *Generator) Html(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
+	if src, ok := e.Attr(atom.Src.String()); ok {
+		var input []byte
+		input, err = ioutil.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		var htmlDoc *goquery.Document
+		htmlDoc, err = gen.parseAndReplace(*bytes.NewBuffer(input), data)
+		if err != nil {
+			return
+		}
+		e.ReplaceWithSelection(htmlDoc.Children())
 	}
-	parent := e.Parent
-	htmlDoc, err := gen.parseAndReplace(*bytes.NewBuffer(input), data)
-	bhtml, err := htmlDoc.WriteToBytes()
-	if err != nil {
-		return
-	}
-	nodes, err := gen.coerce(bhtml)
-	if err != nil {
-		return
-	}
-	gen.appendChildren(parent, nodes)
-	parent.RemoveElement(e)
 	return
 }
 
@@ -571,31 +549,30 @@ func (gen *Generator) Html(e *etree.Element, doc *etree.Document, data *ZasData)
  *
  * They can be handled with MIME type plugins or internal exported methods like Markdown.
  */
-func (gen *Generator) handleEmbedTags(doc *etree.Document, data *ZasData) (err error) {
-	result := doc.FindElements("//embed")
-	if err != nil {
-		return
-	}
-	for _, e := range result {
-		plugin := gen.resolveMIMETypePlugin(e.SelectAttr("type").Value)
-		method := reflect.ValueOf(gen).MethodByName(strings.Title(plugin))
-		if method == reflect.ValueOf(nil) {
-			err = gen.handleMIMETypePlugin(e, doc)
-		} else {
-			args := make([]reflect.Value, 3)
-			args[0] = reflect.ValueOf(e)
-			args[1] = reflect.ValueOf(doc)
-			args[2] = reflect.ValueOf(data)
-			r := method.Call(args)
-			rerr := r[0].Interface()
-			if ierr, ok := rerr.(error); ok {
-				err = ierr
+func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err error) {
+	doc.Find(atom.Embed.String()).EachWithBreak(func (ix int, e *goquery.Selection) bool {
+		if src, ok := e.Attr(atom.Src.String()); ok {
+			plugin := gen.resolveMIMETypePlugin(src)
+			method := reflect.ValueOf(gen).MethodByName(strings.Title(plugin))
+			if method == reflect.ValueOf(nil) {
+				err = gen.handleMIMETypePlugin(e, doc)
+			} else {
+				args := make([]reflect.Value, 2)
+				args[0] = reflect.ValueOf(e)
+				args[1] = reflect.ValueOf(doc)
+				args[2] = reflect.ValueOf(data)
+				r := method.Call(args)
+				rerr := r[0].Interface()
+				if ierr, ok := rerr.(error); ok {
+					err = ierr
+				}
+			}
+			if err != nil {
+				return false
 			}
 		}
-		if err != nil {
-			return
-		}
-	}
+		return true
+	})
 	return
 }
 
@@ -608,9 +585,17 @@ type bufErr struct {
  * Invokes a MIME type plugin based on current node's type attribute, passing src attribute's value
  * as argument. Subcommand's output is piped to Gokogiri through a buffer.
  */
-func (gen *Generator) handleMIMETypePlugin(e *etree.Element, doc *etree.Document) (err error) {
-	src := e.SelectAttr("src").Value
-	typ := e.SelectAttr("type").Value
+func (gen *Generator) handleMIMETypePlugin(e *goquery.Selection, doc *goquery.Document) (err error) {
+	var (
+		src, typ string
+		ok bool
+	)
+	if src, ok = e.Attr(atom.Src.String()); ok {
+		return
+	}
+	if typ, ok = e.Attr(atom.Type.String()); ok {
+		return
+	}
 	cmdname := gen.resolveMIMETypePlugin(typ)
 	if cmdname == "" {
 		return
@@ -636,32 +621,8 @@ func (gen *Generator) handleMIMETypePlugin(e *etree.Element, doc *etree.Document
 	if be.err != nil {
 		return be.err
 	}
-	parent := e.Parent
-	child, err := gen.coerce(be.buffer)
-	if err != nil {
-		return
-	}
-	gen.appendChildren(parent, child)
-	parent.RemoveElement(e)
+	e.ReplaceWithHtml(string(be.buffer))
 	return
-}
-
-func (gen *Generator) coerce(data []byte) (els []*etree.Element, err error) {
-	doc := etree.NewDocument()
-	err = doc.ReadFromBytes(data)
-	if err != nil {
-		return
-	}
-	els = doc.ChildElements()
-	return
-}
-
-func (gen *Generator) appendChildren(parent *etree.Element, children []*etree.Element) {
-	tokens := make([]etree.Token, len(children))
-	for ix, child := range children {
-		tokens[ix] = child
-	}
-	parent.Child = append(parent.Child, tokens...)
 }
 
 /*
