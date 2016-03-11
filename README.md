@@ -22,7 +22,6 @@ Yes, it is another NIH but... I think Zas is a different kind of beast. I admit 
 
 Install:
 
-    # Install libxml2-dev and pkg-config (it works on Linux and Mac OS X, Windows support planned).
     $ go get github.com/imdario/zas
 
 Go to your site's directory and do:
