@@ -1,4 +1,4 @@
-# Zas
+# ![Zas](http://i.imgur.com/e9abWRX.png)
 
 Most. Zen. Static. Website. Generator. Ever.
 
