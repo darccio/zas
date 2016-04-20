@@ -451,8 +451,11 @@ func (gen *Generator) getTitle(doc *goquery.Document) (title string) {
 func (gen *Generator) extractPageConfig(doc *goquery.Document) (config map[interface{}]interface{}, err error) {
 	var comment *html5.Node
 	for _, child := range doc.Nodes {
-		if child.Type == html5.CommentNode {
-			comment = child
+		if child.FirstChild == nil {
+			continue
+		}
+		if child.FirstChild.Type == html5.CommentNode {
+			comment = child.FirstChild
 			break
 		}
 	}
