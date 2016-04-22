@@ -171,9 +171,7 @@ No problem! Just use our old friend \<embed\>. Imagine \<layout\> is a valid tag
 	    </article>
     </layout>
 
-What does it mean? It means you can have .html files with embedded markdown files.
-
-They will be rendered replacing embed tag if and only if they have type attribute set as "text/markdown".
+What does it mean? It means you can have .html files with embedded markdown files. Or anything else supported by Zas.
 
 ## 你会说普通话?
 
