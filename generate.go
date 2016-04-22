@@ -637,7 +637,6 @@ func (gen *Generator) handleMIMETypePlugin(e *goquery.Selection, doc *goquery.Do
  * Returns registered plugin (without ZAS_PREFIX) from config.
  */
 func (gen *Generator) resolveMIMETypePlugin(typ string) string {
-	fmt.Println(typ)
 	return gen.Config.GetSection("mimetypes").GetString(typ)
 }
 
