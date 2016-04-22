@@ -555,12 +555,17 @@ func (gen *Generator) Html(e *goquery.Selection, doc *goquery.Document, data *Za
 func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err error) {
 	doc.Find(atom.Embed.String()).EachWithBreak(func (ix int, e *goquery.Selection) bool {
 		if src, ok := e.Attr(atom.Src.String()); ok {
-			plugin := gen.resolveMIMETypePlugin(src)
+			var typ string
+			if typ, ok = e.Attr(atom.Type.String()); !ok {
+				err = fmt.Errorf("missing type attribute for embed '%s'", src)
+				return false
+			}
+			plugin := gen.resolveMIMETypePlugin(typ)
 			method := reflect.ValueOf(gen).MethodByName(strings.Title(plugin))
 			if method == reflect.ValueOf(nil) {
 				err = gen.handleMIMETypePlugin(e, doc)
 			} else {
-				args := make([]reflect.Value, 2)
+				args := make([]reflect.Value, 3)
 				args[0] = reflect.ValueOf(e)
 				args[1] = reflect.ValueOf(doc)
 				args[2] = reflect.ValueOf(data)
@@ -632,6 +637,7 @@ func (gen *Generator) handleMIMETypePlugin(e *goquery.Selection, doc *goquery.Do
  * Returns registered plugin (without ZAS_PREFIX) from config.
  */
 func (gen *Generator) resolveMIMETypePlugin(typ string) string {
+	fmt.Println(typ)
 	return gen.Config.GetSection("mimetypes").GetString(typ)
 }
 
