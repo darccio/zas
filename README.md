@@ -254,3 +254,8 @@ Zas is under [AGPL v3](http://www.gnu.org/licenses/agpl-3.0.html) license.
 ## Other cool projects
 
 Recently I found this cool generator inspired by zas: [zs](https://github.com/zserge/zs). I'm happy to be a humble reference for somebody :)
+
+## Support on Beerpay
+Hey dude! Help me out for a couple of :beers:!
+
+[![Beerpay](https://beerpay.io/imdario/zas/badge.svg?style=beer-square)](https://beerpay.io/imdario/zas)  [![Beerpay](https://beerpay.io/imdario/zas/make-wish.svg?style=flat-square)](https://beerpay.io/imdario/zas?focus=wish)
