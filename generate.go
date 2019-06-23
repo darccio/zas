@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"github.com/melvinmt/gt"
 	"github.com/PuerkitoBio/goquery"
-	markdown "github.com/russross/blackfriday"
+	markdown "github.com/russross/blackfriday/v2"
 	html5 "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	yaml "gopkg.in/yaml.v2"
@@ -325,7 +325,7 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
 		return
 	}
 	// This is going to haunt me for a while.
-	intermediate := string(markdown.MarkdownCommon(input))
+	intermediate := string(markdown.Run(input, markdown.WithNoExtensions()))
 	md := []byte(html.UnescapeString(intermediate))
 	return gen.render(path, md)
 }
@@ -492,7 +492,7 @@ func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data
 		if err != nil {
 			return err
 		}
-		md := markdown.MarkdownCommon(mdInput)
+		md := markdown.Run(mdInput, markdown.WithNoExtensions())
 		mdDoc, err := gen.parseAndReplace(*bytes.NewBuffer(md), data)
 		if err != nil {
 			return err
