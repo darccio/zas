@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"github.com/melvinmt/gt"
 	"github.com/PuerkitoBio/goquery"
-	markdown "github.com/russross/blackfriday/v2"
+	markdown "gopkg.in/russross/blackfriday.v2"
 	html5 "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	yaml "gopkg.in/yaml.v2"
