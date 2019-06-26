@@ -70,6 +70,17 @@ func (zd *ZasData) Title() (title string) {
 }
 
 /*
+ * Description for meta tag
+*/
+func (zd *ZasData) Description() (description string) {
+	description, ok := zd.Page["description"].(string)
+	if !ok {
+		description = ""
+	}
+	return
+}
+
+/*
  * Builds URL from current configuration.
  */
 func (zd *ZasData) URL() string {
