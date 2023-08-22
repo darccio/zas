@@ -1,4 +1,4 @@
-module github.com/imdario/zas
+module github.com/darccio/zas
 
 go 1.20
 

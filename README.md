@@ -23,7 +23,7 @@ Yes, it is another NIH, but... I think Zas is a different kind of beast. I admit
 Install:
 
 ```sh
-go get github.com/imdario/zas
+go get github.com/darccio/zas
 ```
 
 Go to your site's directory and do:
@@ -262,7 +262,7 @@ language: ru
 
 ## Roadmap
 
-There is no roadmap. I wrote some possible enhancements [here](https://github.com/imdario/zas/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement).
+There is no roadmap. I wrote some possible enhancements [here](https://github.com/darccio/zas/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement).
 
 Feel free to open an issue if you think Zas should do something specific in its core.
 
