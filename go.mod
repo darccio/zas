@@ -8,6 +8,7 @@ require (
 	github.com/melvinmt/gt v1.0.1
 	github.com/russross/blackfriday/v2 v2.1.0
 	golang.org/x/net v0.11.0
+	golang.org/x/text v0.10.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 

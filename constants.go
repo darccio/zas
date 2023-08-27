@@ -15,17 +15,19 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
-package main
+package zas
 
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var ZAS = "zas"
 var ZAS_PREFIX = "zs"
-var ZAS_NAME = strings.Title(ZAS)
+var ZAS_NAME = cases.Title(language.English).String(ZAS)
 var ZAS_DIR = fmt.Sprintf(".%s", ZAS)
 var ZAS_CONF_FILE = filepath.Join(ZAS_DIR, "config.yml")
 var ZAS_I18N_FILE = filepath.Join(ZAS_DIR, "i18n.yml")

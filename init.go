@@ -15,11 +15,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
-package main
+package zas
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -27,10 +26,6 @@ import (
 	"github.com/melvinmt/gt"
 	yaml "gopkg.in/yaml.v2"
 )
-
-var cmdInit = &Subcommand{
-	UsageLine: "init",
-}
 
 /*
  * Aliasing goyaml's default map type.
@@ -42,7 +37,7 @@ type ConfigSection map[interface{}]interface{}
  * It must be a YAML file.
  */
 func NewConfig() (config ConfigSection, err error) {
-	data, err := ioutil.ReadFile(ZAS_CONF_FILE)
+	data, err := os.ReadFile(ZAS_CONF_FILE)
 	if err != nil {
 		return
 	}
@@ -60,7 +55,7 @@ func NewConfig() (config ConfigSection, err error) {
  * It must be a YAML file.
  */
 func NewI18n(mainlang string) (i18n gt.Strings, err error) {
-	data, err := ioutil.ReadFile(ZAS_I18N_FILE)
+	data, err := os.ReadFile(ZAS_I18N_FILE)
 	i18n = make(gt.Strings)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -111,29 +106,28 @@ func (cs ConfigSection) GetZString(key string) string {
 	return s.GetString(key)
 }
 
-func init() {
-	cmdInit.Run = func() {
-		path, _ := filepath.Abs(ZAS_DIR)
-		if _, err := os.Stat(ZAS_DIR); os.IsNotExist(err) {
-			os.Mkdir(ZAS_DIR, os.FileMode(ZAS_DEFAULT_DIR_PERM))
-			fmt.Printf("Initialized empty %s repository in %s\n", ZAS_NAME, path)
-		} else {
-			fmt.Printf("Reinitialized existing %s repository in %s\n", ZAS_NAME, path)
-		}
-		var (
-			data []byte
-			err  error
-		)
-		// If default config variable has fields, we store it as ZAS_CONF_FILE (as defined in constants.go).
-		// It overwrites every time we invoke init subcommand.
-		if len(ZAS_DEFAULT_CONF) > 0 {
-			if data, err = yaml.Marshal(&ZAS_DEFAULT_CONF); err != nil {
-				panic(err)
-			}
-		}
-		if err := ioutil.WriteFile(ZAS_CONF_FILE, data, os.FileMode(ZAS_DEFAULT_FILE_PERM)); err != nil {
+type Init struct{}
+
+func (i *Init) Run() {
+	path, _ := filepath.Abs(ZAS_DIR)
+	if _, err := os.Stat(ZAS_DIR); os.IsNotExist(err) {
+		os.Mkdir(ZAS_DIR, os.FileMode(ZAS_DEFAULT_DIR_PERM))
+		fmt.Printf("Initialized empty %s repository in %s\n", ZAS_NAME, path)
+	} else {
+		fmt.Printf("Reinitialized existing %s repository in %s\n", ZAS_NAME, path)
+	}
+	var (
+		data []byte
+		err  error
+	)
+	// If default config variable has fields, we store it as ZAS_CONF_FILE (as defined in constants.go).
+	// It overwrites every time we invoke init subcommand.
+	if len(ZAS_DEFAULT_CONF) > 0 {
+		if data, err = yaml.Marshal(&ZAS_DEFAULT_CONF); err != nil {
 			panic(err)
 		}
 	}
-	cmdInit.Init()
+	if err := os.WriteFile(ZAS_CONF_FILE, data, os.FileMode(ZAS_DEFAULT_FILE_PERM)); err != nil {
+		panic(err)
+	}
 }

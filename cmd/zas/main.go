@@ -24,44 +24,36 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"github.com/darccio/zas"
 )
-
-/*
- * Zas internal subcommand.
- *
- * Inspired by go command.
- */
-type Subcommand struct {
-	// Runs the subcommand
-	// The args are the arguments after the subcommand name.
-	Run func()
-
-	// UsageLine is the one-line usage message.
-	// The first word in the line is taken to be the subcommand name
-	// with Init() function.
-	UsageLine string
-
-	// Name is the name of the subcommand.
-	Name string
-
-	// Flag is a set of flags specific to this command.
-	Flag flag.FlagSet
-}
-
-/*
- * Subcommand init function.
- */
-func (c *Subcommand) Init() {
-	data := strings.SplitN(c.UsageLine, " ", 2)
-	c.Name = strings.ToLower(data[0])
-}
 
 /*
  * Current Zas internal subcommands.
  */
-var subcommands = []*Subcommand{
+var subcommands = []*zas.Subcommand{
 	cmdInit,
 	cmdGenerate,
+}
+
+var (
+	cmdInit = zas.NewSubcommand("init", func() {
+		i := zas.Init{}
+		i.Run()
+	})
+	cmdGenerate = zas.NewSubcommand("generate", func() {
+		g := zas.Generator{
+			Verbose: *verbose,
+			Full:    *full,
+		}
+		g.Run()
+	})
+	verbose, full *bool
+)
+
+func init() {
+	verbose = cmdGenerate.Flag.Bool("verbose", false, "Verbose output")
+	full = cmdGenerate.Flag.Bool("full", false, "Full generation (non-incremental mode)")
 }
 
 func main() {
@@ -85,7 +77,7 @@ func main() {
 	}
 	if !found {
 		// If not internal subcommand is found, we try to exec an external Zas subcommand (plugin).
-		cmd := exec.Command(fmt.Sprintf("%s%s", ZAS_PREFIX, args[0]), args[1:]...)
+		cmd := exec.Command(fmt.Sprintf("%s%s", zas.ZAS_PREFIX, args[0]), args[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {

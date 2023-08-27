@@ -15,15 +15,16 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
-package main
+package zas
 
 import (
 	"errors"
 	"fmt"
-	"github.com/melvinmt/gt"
 	thtml "html/template"
 	"path"
 	"strings"
+
+	"github.com/melvinmt/gt"
 )
 
 /*

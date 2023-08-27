@@ -15,33 +15,32 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
-package main
+package zas
 
 import (
 	"bytes"
 	"fmt"
-	"github.com/melvinmt/gt"
-	"github.com/PuerkitoBio/goquery"
-	markdown "github.com/russross/blackfriday/v2"
-	html5 "golang.org/x/net/html"
-	"golang.org/x/net/html/atom"
-	yaml "gopkg.in/yaml.v2"
 	"html"
 	thtml "html/template"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	ttext "text/template"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/melvinmt/gt"
+	markdown "github.com/russross/blackfriday/v2"
+	html5 "golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var (
-	cmdGenerate = &Subcommand{
-		UsageLine: "generate",
-	}
 	helpers = thtml.FuncMap{
 		"noescape": noescape,
 		"eq":       eq,
@@ -52,6 +51,10 @@ var (
  * Convenience type to group relevant rendering info.
  */
 type Generator struct {
+	// Verbose output.
+	Verbose bool
+	// Full generation (non-incremental mode).
+	Full bool
 	// Config from ZAS_CONF_FILE.
 	Config ConfigSection
 	// Default layout from Config[ZAS]["layout"].
@@ -116,52 +119,45 @@ func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (do
 	return
 }
 
-var verbose = cmdGenerate.Flag.Bool("verbose", false, "Verbose output")
-var full = cmdGenerate.Flag.Bool("full", false, "Full generation (non-incremental mode)")
-
-func init() {
-	cmdGenerate.Run = func() {
-		var (
-			gen Generator
-			err error
-		)
-		if gen.Config, err = NewConfig(); err != nil {
-			if os.IsNotExist(err) {
-				fmt.Printf("fatal: Not a valid Zas repository: %s\n", err)
-				return
-			}
-			panic(err)
+func (gen *Generator) Run() error {
+	cfg, err := NewConfig()
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("fatal: Not a valid Zas repository: %s\n", err)
+			return err
 		}
-		gen.errs = make(chan error)
-		gen.done = make(chan bool)
-		go gen.parseLayout()
-		go gen.loadI18N()
-		go gen.handleDeployPath(*full)
-		gen.wait(3)
-		// Walking function. It allows to bubble up any error from generator.
-		walk := func(path string, info os.FileInfo, err error) error {
-			return gen.walk(path, info, err)
+		return err
+	}
+	gen.Config = cfg
+	gen.errs = make(chan error)
+	gen.done = make(chan bool)
+	go gen.parseLayout()
+	go gen.loadI18N()
+	go gen.handleDeployPath(gen.Full)
+	gen.wait(3)
+	// Walking function. It allows to bubble up any error from generator.
+	walk := func(path string, info os.FileInfo, err error) error {
+		return gen.walk(path, info, err)
+	}
+	// TODO optimize for lesser hits on disk
+	if err := filepath.Walk(".", gen.countwalk); err != nil {
+		return err
+	}
+	if err := filepath.Walk(".", walk); err != nil {
+		return err
+	}
+	gen.wait(gen.expectedFiles)
+	if !gen.Full {
+		// TODO Can we go parallel?
+		// This removes deleted source files in deploy path
+		reapwalk := func(path string, info os.FileInfo, err error) error {
+			return gen.reaper(path, info, err)
 		}
-		// TODO optimize for lesser hits on disk
-		if err := filepath.Walk(".", gen.countwalk); err != nil {
-			panic(err)
-		}
-		if err := filepath.Walk(".", walk); err != nil {
-			panic(err)
-		}
-		gen.wait(gen.expectedFiles)
-		if !*full {
-			// TODO Can we go parallel?
-			// This removes deleted source files in deploy path
-			reapwalk := func(path string, info os.FileInfo, err error) error {
-				return gen.reaper(path, info, err)
-			}
-			if err = filepath.Walk(gen.GetDeployPath(), reapwalk); err != nil {
-				panic(err)
-			}
+		if err = filepath.Walk(gen.GetDeployPath(), reapwalk); err != nil {
+			return err
 		}
 	}
-	cmdGenerate.Init()
+	return nil
 }
 
 /*
@@ -244,7 +240,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 		ierr = os.MkdirAll(gen.BuildDeployPath(path), os.FileMode(ZAS_DEFAULT_DIR_PERM))
 	} else {
 		if gen.sourceIsNewer(path, info) {
-			if *verbose {
+			if gen.Verbose {
 				fmt.Println("+", path)
 			}
 			go gen.renderAsync(path)
@@ -287,7 +283,7 @@ func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr err
 			}
 		}
 		if reap {
-			if *verbose {
+			if gen.Verbose {
 				fmt.Println("-", sourcePath)
 			}
 			os.RemoveAll(path)
@@ -300,7 +296,7 @@ func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr err
 
 func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
 	// Shortcut
-	if *full {
+	if gen.Full {
 		return true
 	}
 	realpath := string(path)
@@ -320,7 +316,7 @@ func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
  * Renders a Markdown file.
  */
 func (gen *Generator) renderMarkdown(path string) (err error) {
-	input, err := ioutil.ReadFile(path)
+	input, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
@@ -334,7 +330,7 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
  * Renders a HTML file.
  */
 func (gen *Generator) renderHTML(path string) (err error) {
-	input, err := ioutil.ReadFile(path)
+	input, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
@@ -350,7 +346,7 @@ func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigS
 	var ok bool
 	path := filepath.Dir(currentpath)
 	if config, ok = gen.cachedZasDirectoryConfigs[path]; !ok {
-		data, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE))
+		data, err := os.ReadFile(fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE))
 		if err != nil {
 			// Maybe .zas.yml is in an upper directory (already cached or not),
 			// so we call this recursively.
@@ -361,7 +357,7 @@ func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigS
 			return gen.loadZasDirectoryConfig(path)
 		}
 		config = make(ConfigSection)
-		err = yaml.Unmarshal(data, &config)
+		_ = yaml.Unmarshal(data, &config)
 		if gen.cachedZasDirectoryConfigs == nil {
 			gen.cachedZasDirectoryConfigs = make(map[string]ConfigSection)
 		}
@@ -419,7 +415,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
  * are inside).
  */
 func (gen *Generator) cleanUnnecessaryPTags(doc *goquery.Document) {
-	doc.Find(atom.P.String()).Each(func (ix int, p *goquery.Selection) {
+	doc.Find(atom.P.String()).Each(func(ix int, p *goquery.Selection) {
 		hasText := false
 		// Little heuristic to remove nodes with visually empty content.
 		content := strings.TrimSpace(p.Nodes[0].Data)
@@ -431,7 +427,6 @@ func (gen *Generator) cleanUnnecessaryPTags(doc *goquery.Document) {
 			p.ReplaceWithSelection(p.Children())
 		}
 	})
-	return
 }
 
 /*
@@ -488,7 +483,7 @@ func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
  */
 func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
-		mdInput, err := ioutil.ReadFile(src)
+		mdInput, err := os.ReadFile(src)
 		if err != nil {
 			return err
 		}
@@ -508,7 +503,7 @@ func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data
 func (gen *Generator) Plain(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
 		var input []byte
-		input, err = ioutil.ReadFile(src)
+		input, err = os.ReadFile(src)
 		if err != nil {
 			return err
 		}
@@ -521,7 +516,7 @@ func (gen *Generator) Plain(e *goquery.Selection, doc *goquery.Document, data *Z
 		if err = template.Execute(&processed, data); err != nil {
 			return
 		}
-		e.Parent().Nodes[0].Data = string(processed.Bytes())
+		e.Parent().Nodes[0].Data = processed.String()
 		e.Remove()
 	}
 	return
@@ -533,7 +528,7 @@ func (gen *Generator) Plain(e *goquery.Selection, doc *goquery.Document, data *Z
 func (gen *Generator) Html(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
 		var input []byte
-		input, err = ioutil.ReadFile(src)
+		input, err = os.ReadFile(src)
 		if err != nil {
 			return err
 		}
@@ -553,7 +548,7 @@ func (gen *Generator) Html(e *goquery.Selection, doc *goquery.Document, data *Za
  * They can be handled with MIME type plugins or internal exported methods like Markdown.
  */
 func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err error) {
-	doc.Find(atom.Embed.String()).EachWithBreak(func (ix int, e *goquery.Selection) bool {
+	doc.Find(atom.Embed.String()).EachWithBreak(func(ix int, e *goquery.Selection) bool {
 		if src, ok := e.Attr(atom.Src.String()); ok {
 			var typ string
 			if typ, ok = e.Attr(atom.Type.String()); !ok {
@@ -561,7 +556,7 @@ func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err
 				return false
 			}
 			plugin := gen.resolveMIMETypePlugin(typ)
-			method := reflect.ValueOf(gen).MethodByName(strings.Title(plugin))
+			method := reflect.ValueOf(gen).MethodByName(cases.Title(language.English).String(plugin))
 			if method == reflect.ValueOf(nil) {
 				err = gen.handleMIMETypePlugin(e, doc)
 			} else {
@@ -596,7 +591,7 @@ type bufErr struct {
 func (gen *Generator) handleMIMETypePlugin(e *goquery.Selection, doc *goquery.Document) (err error) {
 	var (
 		src, typ string
-		ok bool
+		ok       bool
 	)
 	if src, ok = e.Attr(atom.Src.String()); ok {
 		return
@@ -616,7 +611,7 @@ func (gen *Generator) handleMIMETypePlugin(e *goquery.Selection, doc *goquery.Do
 	cmd.Stderr = os.Stderr
 	c := make(chan bufErr)
 	go func() {
-		data, err := ioutil.ReadAll(stdout)
+		data, err := io.ReadAll(stdout)
 		c <- bufErr{data, err}
 	}()
 	if err = cmd.Start(); err != nil {
