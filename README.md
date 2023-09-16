@@ -23,7 +23,7 @@ Yes, it is another NIH, but... I think Zas is a different kind of beast. I admit
 Install:
 
 ```sh
-go install dario.cat/zas/cmd/zas@latest
+go install github.com/darccio/zas/cmd/zas@latest
 ```
 
 Go to your site's directory and do:
