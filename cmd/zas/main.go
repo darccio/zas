@@ -18,7 +18,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -57,32 +56,48 @@ func init() {
 }
 
 func main() {
-	flag.Parse()
-	args := flag.Args()
-	if len(args) > 0 {
-		args[0] = strings.ToLower(args[0])
-	} else {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	args := os.Args[1:]
+	if len(args) == 0 {
 		// If no subcommand is provided, we default to "generate".
 		args = []string{"generate"}
 	}
-	runtime.GOMAXPROCS(runtime.NumCPU())
-	found := false
+
+	if strings.HasPrefix(args[0], "-") {
+		// If the first argument is a flag, we default to "generate".
+		args = append([]string{"generate"}, args...)
+	}
+
+	var (
+		command = strings.ToLower(args[0])
+		found = false
+	)
+
 	for _, cmd := range subcommands {
-		if cmd.Name == args[0] && cmd.Run != nil {
+		if cmd.Name == command && cmd.Run != nil {
 			found = true
+
 			cmd.Flag.Parse(args[1:])
 			cmd.Run()
+
 			break
 		}
 	}
-	if !found {
-		// If not internal subcommand is found, we try to exec an external Zas subcommand (plugin).
-		cmd := exec.Command(fmt.Sprintf("%s%s", zas.ZAS_PREFIX, args[0]), args[1:]...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "# %s %s\n", args[0], strings.Join(args[1:], " "))
-			panic(err)
-		}
+
+	if found {
+		// If an internal subcommand is found, we exit.
+		os.Exit(0)
+	}
+
+	// If not internal subcommand is found, we try to exec an external Zas subcommand (plugin).
+	cmd := exec.Command(fmt.Sprintf("%s%s", zas.ZAS_PREFIX, args[0]), args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "# %s %s\n", args[0], strings.Join(args[1:], " "))
+
+		panic(err)
 	}
 }
