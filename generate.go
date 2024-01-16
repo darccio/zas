@@ -40,12 +40,10 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-var (
-	helpers = thtml.FuncMap{
-		"noescape": noescape,
-		"eq":       eq,
-	}
-)
+var helpers = thtml.FuncMap{
+	"noescape": noescape,
+	"eq":       eq,
+}
 
 /*
  * Convenience type to group relevant rendering info.
@@ -466,7 +464,7 @@ func (gen *Generator) extractPageConfig(doc *goquery.Document) (config map[inter
 /*
  * Copies a file.
  */
-func (gen *Generator) copy(dstPath string, srcPath string) (err error) {
+func (gen *Generator) copy(dstPath, srcPath string) (err error) {
 	src, err := os.Open(srcPath)
 	if err != nil {
 		return

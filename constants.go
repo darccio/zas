@@ -25,27 +25,29 @@ import (
 	"golang.org/x/text/language"
 )
 
-var ZAS = "zas"
-var ZAS_PREFIX = "zs"
-var ZAS_NAME = cases.Title(language.English).String(ZAS)
-var ZAS_DIR = fmt.Sprintf(".%s", ZAS)
-var ZAS_CONF_FILE = filepath.Join(ZAS_DIR, "config.yml")
-var ZAS_I18N_FILE = filepath.Join(ZAS_DIR, "i18n.yml")
-var ZAS_DIR_CONF_FILE = fmt.Sprintf(".%s.yml", ZAS)
-var ZAS_DEFAULT_DIR_PERM = 0755
-var ZAS_DEFAULT_FILE_PERM = 0644
-var ZAS_DEFAULT_CONF = ConfigSection{
-	ZAS: ConfigSection{
-		"layout": filepath.Join(ZAS_DIR, "layout.html"),
-		"deploy": filepath.Join(ZAS_DIR, "deploy"),
-	},
-	"site": ConfigSection{
-		"baseurl":  "http://example.com",
-		"language": "en",
-	},
-	"mimetypes": ConfigSection{
-		"text/markdown": "markdown",
-		"text/plain":    "plain",
-		"text/html":     "html",
-	},
-}
+var (
+	ZAS                   = "zas"
+	ZAS_PREFIX            = "zs"
+	ZAS_NAME              = cases.Title(language.English).String(ZAS)
+	ZAS_DIR               = fmt.Sprintf(".%s", ZAS)
+	ZAS_CONF_FILE         = filepath.Join(ZAS_DIR, "config.yml")
+	ZAS_I18N_FILE         = filepath.Join(ZAS_DIR, "i18n.yml")
+	ZAS_DIR_CONF_FILE     = fmt.Sprintf(".%s.yml", ZAS)
+	ZAS_DEFAULT_DIR_PERM  = 0o755
+	ZAS_DEFAULT_FILE_PERM = 0o644
+	ZAS_DEFAULT_CONF      = ConfigSection{
+		ZAS: ConfigSection{
+			"layout": filepath.Join(ZAS_DIR, "layout.html"),
+			"deploy": filepath.Join(ZAS_DIR, "deploy"),
+		},
+		"site": ConfigSection{
+			"baseurl":  "http://example.com",
+			"language": "en",
+		},
+		"mimetypes": ConfigSection{
+			"text/markdown": "markdown",
+			"text/plain":    "plain",
+			"text/html":     "html",
+		},
+	}
+)
