@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	ttext "text/template"
 
 	"github.com/PuerkitoBio/goquery"
@@ -61,12 +62,8 @@ type Generator struct {
 	I18n *gt.Build
 	// ZasDirectoryConfigs cache
 	cachedZasDirectoryConfigs map[string]ConfigSection
-	// Errors channel for async actions
-	errs chan error
-	// Done channel for async actions
-	done chan bool
-	// Counter for started goroutines
-	expectedFiles int
+
+	wg sync.WaitGroup
 }
 
 /*
@@ -127,24 +124,19 @@ func (gen *Generator) Run() error {
 		return err
 	}
 	gen.Config = cfg
-	gen.errs = make(chan error)
-	gen.done = make(chan bool)
+	gen.wg.Add(3)
 	go gen.parseLayout()
 	go gen.loadI18N()
 	go gen.handleDeployPath(gen.Full)
-	gen.wait(3)
+	gen.wg.Wait()
 	// Walking function. It allows to bubble up any error from generator.
 	walk := func(path string, info os.FileInfo, err error) error {
 		return gen.walk(path, info, err)
 	}
-	// TODO optimize for lesser hits on disk
-	if err := filepath.Walk(".", gen.countwalk); err != nil {
-		return err
-	}
 	if err := filepath.Walk(".", walk); err != nil {
 		return err
 	}
-	gen.wait(gen.expectedFiles)
+	gen.wg.Wait()
 	if !gen.Full {
 		// TODO Can we go parallel?
 		// This removes deleted source files in deploy path
@@ -158,34 +150,19 @@ func (gen *Generator) Run() error {
 	return nil
 }
 
-/*
- * Waits for the last N started goroutines.
- */
-func (gen *Generator) wait(goroutines int) (err error) {
-	for i := 0; i < goroutines; i++ {
-		select {
-		case <-gen.done:
-			// NOOP
-		case err = <-gen.errs:
-			// TODO improve error handling showing which file caused a given error
-			if err != nil {
-				return
-			}
-		}
-	}
-	return
-}
-
 func (gen *Generator) parseLayout() {
 	var err error
+	defer gen.wg.Done()
+
 	layout := gen.Config.GetZString("layout")
 	if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
 		panic(err)
 	}
-	gen.done <- true
 }
 
 func (gen *Generator) loadI18N() {
+	defer gen.wg.Done()
+
 	mainlang := gen.Config.GetSection("site").GetString("language")
 	i18nStrings, err := NewI18n(mainlang)
 	if err != nil {
@@ -195,10 +172,11 @@ func (gen *Generator) loadI18N() {
 		Index:  i18nStrings,
 		Origin: mainlang,
 	}
-	gen.done <- true
 }
 
 func (gen *Generator) handleDeployPath(full bool) {
+	defer gen.wg.Done()
+
 	deployPath := gen.GetDeployPath()
 	// If deployment path already exists, it must be deleted.
 	if _, err := os.Stat(deployPath); err == nil && full {
@@ -209,29 +187,13 @@ func (gen *Generator) handleDeployPath(full bool) {
 	if err := os.MkdirAll(deployPath, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
 		panic(err)
 	}
-	gen.done <- true
-}
-
-/*
- * Count walking function. Counts all files affected by walk().
- */
-func (gen *Generator) countwalk(path string, info os.FileInfo, err error) (ierr error) {
-	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") {
-		return
-	}
-	if !info.IsDir() {
-		if gen.sourceIsNewer(path, info) {
-			gen.expectedFiles++
-		}
-	}
-	return
 }
 
 /*
  * Real walking function. Handles all supported files and copy not supported ones in current deployment path.
  */
 func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error) {
-	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") {
+	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || strings.Contains(path, fmt.Sprintf("%s/", ZAS_DIR)) {
 		return
 	}
 	if info.IsDir() {
@@ -241,6 +203,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 			if gen.Verbose {
 				fmt.Println("+", path)
 			}
+			gen.wg.Add(1)
 			go gen.renderAsync(path)
 		}
 	}
@@ -249,6 +212,8 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 
 func (gen *Generator) renderAsync(path string) {
 	var err error
+	defer gen.wg.Done()
+
 	switch {
 	case strings.HasSuffix(path, ".md"):
 		err = gen.renderMarkdown(path)
@@ -257,10 +222,10 @@ func (gen *Generator) renderAsync(path string) {
 	default:
 		err = gen.copy(gen.BuildDeployPath(path), path)
 	}
+
 	if err != nil {
-		gen.errs <- err
+		fmt.Printf("fatal: %s => %s\n", path, err)
 	}
-	gen.done <- true
 }
 
 /*
