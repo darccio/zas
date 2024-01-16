@@ -6,9 +6,9 @@ require (
 	dario.cat/mergo v1.0.0
 	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/melvinmt/gt v1.0.1
-	github.com/yuin/goldmark v1.5.6
-	golang.org/x/net v0.15.0
-	golang.org/x/text v0.13.0
+	github.com/yuin/goldmark v1.6.0
+	golang.org/x/net v0.20.0
+	golang.org/x/text v0.14.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
