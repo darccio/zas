@@ -36,6 +36,7 @@ var subcommands = []*zas.Subcommand{
 }
 
 var (
+	verbose, full *bool
 	cmdInit = zas.NewSubcommand("init", func() {
 		i := zas.Init{}
 		i.Run()
@@ -47,7 +48,6 @@ var (
 		}
 		g.Run()
 	})
-	verbose, full *bool
 )
 
 func init() {
@@ -69,25 +69,15 @@ func main() {
 		args = append([]string{"generate"}, args...)
 	}
 
-	var (
-		command = strings.ToLower(args[0])
-		found = false
-	)
+	command := strings.ToLower(args[0])
 
 	for _, cmd := range subcommands {
 		if cmd.Name == command && cmd.Run != nil {
-			found = true
-
 			cmd.Flag.Parse(args[1:])
 			cmd.Run()
 
-			break
+			os.Exit(0)
 		}
-	}
-
-	if found {
-		// If an internal subcommand is found, we exit.
-		os.Exit(0)
 	}
 
 	// If not internal subcommand is found, we try to exec an external Zas subcommand (plugin).

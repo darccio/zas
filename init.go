@@ -36,18 +36,22 @@ type ConfigSection map[interface{}]interface{}
  * Loads ZAS_CONF_FILE (as defined in constants.go).
  * It must be a YAML file.
  */
-func NewConfig() (config ConfigSection, err error) {
+func NewConfig() (ConfigSection, error) {
 	data, err := os.ReadFile(ZAS_CONF_FILE)
 	if err != nil {
-		return
+		return nil, err
 	}
-	config = make(ConfigSection)
-	err = yaml.Unmarshal(data, &config)
-	if err != nil {
-		return
+
+	var config ConfigSection
+	if err = yaml.Unmarshal(data, &config); err != nil {
+		return nil, err
 	}
-	err = mergo.Merge(&config, ZAS_DEFAULT_CONF)
-	return
+
+	if err = mergo.Merge(&config, ZAS_DEFAULT_CONF); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 /*
