@@ -7,8 +7,8 @@ require (
 	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/melvinmt/gt v1.0.1
 	github.com/yuin/goldmark v1.6.0
-	golang.org/x/net v0.23.0
-	golang.org/x/text v0.14.0
+	golang.org/x/net v0.36.0
+	golang.org/x/text v0.22.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
