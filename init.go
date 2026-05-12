@@ -92,6 +92,28 @@ func (cs ConfigSection) GetString(key string) (value string) {
 }
 
 /*
+ * Returns a string slice value from current section.
+ */
+func (cs ConfigSection) GetStringSlice(key string) (values []string) {
+	raw := cs[key]
+	switch v := raw.(type) {
+	case []interface{}:
+		for _, item := range v {
+			if value, ok := item.(string); ok {
+				values = append(values, value)
+			}
+		}
+	case []string:
+		values = append(values, v...)
+	case string:
+		if v != "" {
+			values = append(values, v)
+		}
+	}
+	return
+}
+
+/*
  * Returns a subsection from current section.
  */
 func (cs ConfigSection) GetSection(key string) (value ConfigSection) {
@@ -108,6 +130,14 @@ func (cs ConfigSection) GetSection(key string) (value ConfigSection) {
 func (cs ConfigSection) GetZString(key string) string {
 	s := cs.GetSection(ZAS)
 	return s.GetString(key)
+}
+
+/*
+ * Returns a string slice value from default Zas section.
+ */
+func (cs ConfigSection) GetZStringSlice(key string) []string {
+	s := cs.GetSection(ZAS)
+	return s.GetStringSlice(key)
 }
 
 type Init struct{}

@@ -37,8 +37,9 @@ var (
 	ZAS_DEFAULT_FILE_PERM = 0o644
 	ZAS_DEFAULT_CONF      = ConfigSection{
 		ZAS: ConfigSection{
-			"layout": filepath.Join(ZAS_DIR, "layout.html"),
-			"deploy": filepath.Join(ZAS_DIR, "deploy"),
+			"layout":  filepath.Join(ZAS_DIR, "layout.html"),
+			"deploy":  filepath.Join(ZAS_DIR, "deploy"),
+			"exclude": []string{},
 		},
 		"site": ConfigSection{
 			"baseurl":  "http://example.com",
