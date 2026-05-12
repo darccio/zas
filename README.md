@@ -45,6 +45,17 @@ What is happening here? Well, Zas calls the `generate` subcommand by default. Th
 * `-verbose`: print ALL the things!
 * `-full`: generate all the input files. By default, it has an incremental mode that keeps source and deploys directories in sync.
 
+To skip files during generation, add glob patterns to `zas.exclude` in `.zas/config.yml`:
+
+```yaml
+zas:
+  exclude:
+    - README.md
+    - drafts/*
+```
+
+Excluded files are not copied or rendered into `.zas/deploy`. In incremental mode, outputs from files that later become excluded are removed from the deploy directory.
+
 ## Configuration and extension
 
 Zas is like water. It can flow, or it can cr... Nah, Zas doesn't crash (please fill an issue if it does).

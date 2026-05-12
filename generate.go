@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	pathpkg "path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -78,6 +79,33 @@ func (gen *Generator) GetDeployPath() string {
  */
 func (gen *Generator) BuildDeployPath(path string) string {
 	return filepath.Join(gen.GetDeployPath(), path)
+}
+
+/*
+ * Checks whether the configured exclude patterns match path.
+ */
+func (gen *Generator) IsExcluded(path string) bool {
+	cleanPath := filepath.ToSlash(filepath.Clean(path))
+	cleanPath = strings.TrimPrefix(cleanPath, "./")
+	cleanPath = strings.TrimPrefix(cleanPath, "/")
+	basePath := pathpkg.Base(cleanPath)
+	for _, pattern := range gen.Config.GetZStringSlice("exclude") {
+		pattern = strings.TrimSpace(filepath.ToSlash(pattern))
+		pattern = strings.TrimPrefix(pattern, "./")
+		pattern = strings.TrimPrefix(pattern, "/")
+		if pattern == "" {
+			continue
+		}
+		if matched, _ := pathpkg.Match(pattern, cleanPath); matched {
+			return true
+		}
+		if !strings.Contains(pattern, "/") {
+			if matched, _ := pathpkg.Match(pattern, basePath); matched {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 /*
@@ -193,7 +221,16 @@ func (gen *Generator) handleDeployPath(full bool) {
  * Real walking function. Handles all supported files and copy not supported ones in current deployment path.
  */
 func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error) {
+	if err != nil {
+		return err
+	}
 	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || strings.Contains(path, fmt.Sprintf("%s/", ZAS_DIR)) {
+		return
+	}
+	if gen.IsExcluded(path) {
+		if info.IsDir() {
+			return filepath.SkipDir
+		}
 		return
 	}
 	if info.IsDir() {
@@ -232,7 +269,14 @@ func (gen *Generator) renderAsync(path string) {
  * Real reaping function. Reaps all missing source files in current deployment path.
  */
 func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr error) {
-	sourcePath := strings.Replace(path, gen.GetDeployPath(), ".", 1)
+	if err != nil {
+		return err
+	}
+	relativeSourcePath, err := filepath.Rel(gen.GetDeployPath(), path)
+	if err != nil {
+		return err
+	}
+	sourcePath := filepath.Join(".", relativeSourcePath)
 	source, err := os.Open(sourcePath)
 	// TODO it must clean directories too
 	if err != nil {
@@ -240,9 +284,11 @@ func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr err
 		if strings.HasSuffix(sourcePath, ".html") {
 			sourcePath = strings.Replace(sourcePath, ".html", ".md", 1)
 			sourceNew, err := os.Open(sourcePath)
-			if err == nil {
+			if err == nil && !gen.IsExcluded(sourcePath) {
 				sourceNew.Close()
 				reap = false
+			} else if err == nil {
+				sourceNew.Close()
 			}
 		}
 		if reap {
@@ -253,6 +299,12 @@ func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr err
 		}
 	} else {
 		source.Close()
+		if gen.IsExcluded(sourcePath) {
+			if gen.Verbose {
+				fmt.Println("-", sourcePath)
+			}
+			os.RemoveAll(path)
+		}
 	}
 	return
 }
