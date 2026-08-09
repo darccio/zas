@@ -36,7 +36,9 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/melvinmt/gt"
 	markdown "github.com/yuin/goldmark"
-	htmlrenderer "github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/util"
 	html5 "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	"golang.org/x/text/cases"
@@ -48,6 +50,54 @@ var helpers = thtml.FuncMap{
 	"noescape": noescape,
 	"eq":       eq,
 }
+
+// rawHTMLRenderer overrides only goldmark's raw-HTML node kinds (block and
+// inline) to pass their source through unchanged, instead of the default
+// renderer's "<!-- raw HTML omitted -->" placeholder. Unlike
+// html.WithUnsafe(), this leaves every other renderer - including the ones
+// that sanitize link and image destinations against javascript:/data:/etc.
+// URLs - on their default, safe behavior. It's registered at a lower
+// priority number than the default HTML renderer (1000), which wins ties.
+type rawHTMLRenderer struct{}
+
+func (r *rawHTMLRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(ast.KindHTMLBlock, r.renderHTMLBlock)
+	reg.Register(ast.KindRawHTML, r.renderRawHTML)
+}
+
+func (r *rawHTMLRenderer) renderHTMLBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	n := node.(*ast.HTMLBlock)
+	if entering {
+		for i := 0; i < n.Lines().Len(); i++ {
+			line := n.Lines().At(i)
+			_, _ = w.Write(line.Value(source))
+		}
+	} else if n.HasClosure() {
+		_, _ = w.Write(n.ClosureLine.Value(source))
+	}
+	return ast.WalkContinue, nil
+}
+
+func (r *rawHTMLRenderer) renderRawHTML(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		return ast.WalkSkipChildren, nil
+	}
+	n := node.(*ast.RawHTML)
+	for i := 0; i < n.Segments.Len(); i++ {
+		segment := n.Segments.At(i)
+		_, _ = w.Write(segment.Value(source))
+	}
+	return ast.WalkSkipChildren, nil
+}
+
+// markdownConverter passes raw HTML through instead of dropping it - a
+// leading HTML comment (per-page config) and an <embed> tag written
+// directly in a .md file would otherwise never reach Zas. Built once at
+// package init and shared across renderAsync goroutines: goldmark builds a
+// fresh parse context per Convert call, so this is safe for concurrent use.
+var markdownConverter = markdown.New(markdown.WithRendererOptions(
+	renderer.WithNodeRenderers(util.Prioritized(&rawHTMLRenderer{}, 100)),
+))
 
 /*
  * Convenience type to group relevant rendering info.
@@ -321,7 +371,7 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
 	}
 	// This is going to haunt me for a while.
 	var b bytes.Buffer
-	if err := markdown.New(markdown.WithRendererOptions(htmlrenderer.WithUnsafe())).Convert(input, &b); err != nil {
+	if err := markdownConverter.Convert(input, &b); err != nil {
 		return err
 	}
 	md := []byte(html.UnescapeString(b.String()))
@@ -512,7 +562,7 @@ func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data
 			return err
 		}
 		var b bytes.Buffer
-		if err := markdown.New(markdown.WithRendererOptions(htmlrenderer.WithUnsafe())).Convert(mdInput, &b); err != nil {
+		if err := markdownConverter.Convert(mdInput, &b); err != nil {
 			return err
 		}
 		mdDoc, err := gen.parseAndReplace(b, data)
