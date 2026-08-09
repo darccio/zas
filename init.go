@@ -114,7 +114,7 @@ func (cs ConfigSection) GetZString(key string) string {
 
 type Init struct{}
 
-func (i *Init) Run() {
+func (i *Init) Run() error {
 	path, _ := filepath.Abs(ZAS_DIR)
 	if _, err := os.Stat(ZAS_DIR); os.IsNotExist(err) {
 		os.Mkdir(ZAS_DIR, os.FileMode(ZAS_DEFAULT_DIR_PERM))
@@ -130,10 +130,8 @@ func (i *Init) Run() {
 	// It overwrites every time we invoke init subcommand.
 	if len(ZAS_DEFAULT_CONF) > 0 {
 		if data, err = yaml.Marshal(&ZAS_DEFAULT_CONF); err != nil {
-			panic(err)
+			return err
 		}
 	}
-	if err := os.WriteFile(ZAS_CONF_FILE, data, os.FileMode(ZAS_DEFAULT_FILE_PERM)); err != nil {
-		panic(err)
-	}
+	return os.WriteFile(ZAS_CONF_FILE, data, os.FileMode(ZAS_DEFAULT_FILE_PERM))
 }
