@@ -8,7 +8,7 @@ require (
 	github.com/melvinmt/gt v1.0.1
 	github.com/yuin/goldmark v1.8.5
 	golang.org/x/net v0.55.0
-	golang.org/x/text v0.37.0
+	golang.org/x/text v0.40.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
