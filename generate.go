@@ -36,7 +36,9 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/melvinmt/gt"
 	markdown "github.com/yuin/goldmark"
-	htmlrenderer "github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/util"
 	html5 "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	"golang.org/x/text/cases"
@@ -48,6 +50,54 @@ var helpers = thtml.FuncMap{
 	"noescape": noescape,
 	"eq":       eq,
 }
+
+// rawHTMLRenderer overrides only goldmark's raw-HTML node kinds (block and
+// inline) to pass their source through unchanged, instead of the default
+// renderer's "<!-- raw HTML omitted -->" placeholder. Unlike
+// html.WithUnsafe(), this leaves every other renderer - including the ones
+// that sanitize link and image destinations against javascript:/data:/etc.
+// URLs - on their default, safe behavior. It's registered at a lower
+// priority number than the default HTML renderer (1000), which wins ties.
+type rawHTMLRenderer struct{}
+
+func (r *rawHTMLRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(ast.KindHTMLBlock, r.renderHTMLBlock)
+	reg.Register(ast.KindRawHTML, r.renderRawHTML)
+}
+
+func (r *rawHTMLRenderer) renderHTMLBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	n := node.(*ast.HTMLBlock)
+	if entering {
+		for i := 0; i < n.Lines().Len(); i++ {
+			line := n.Lines().At(i)
+			_, _ = w.Write(line.Value(source))
+		}
+	} else if n.HasClosure() {
+		_, _ = w.Write(n.ClosureLine.Value(source))
+	}
+	return ast.WalkContinue, nil
+}
+
+func (r *rawHTMLRenderer) renderRawHTML(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		return ast.WalkSkipChildren, nil
+	}
+	n := node.(*ast.RawHTML)
+	for i := 0; i < n.Segments.Len(); i++ {
+		segment := n.Segments.At(i)
+		_, _ = w.Write(segment.Value(source))
+	}
+	return ast.WalkSkipChildren, nil
+}
+
+// markdownConverter passes raw HTML through instead of dropping it - a
+// leading HTML comment (per-page config) and an <embed> tag written
+// directly in a .md file would otherwise never reach Zas. Built once at
+// package init and shared across renderAsync goroutines: goldmark builds a
+// fresh parse context per Convert call, so this is safe for concurrent use.
+var markdownConverter = markdown.New(markdown.WithRendererOptions(
+	renderer.WithNodeRenderers(util.Prioritized(&rawHTMLRenderer{}, 100)),
+))
 
 /*
  * Convenience type to group relevant rendering info.
@@ -110,6 +160,18 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	if err != nil {
 		return
 	}
+	if len(data.bodyAttrs) > 0 {
+		// Body only carries the source page's inner HTML, not its <body>
+		// element, so its attributes need to be merged onto the layout's
+		// <body> explicitly. Non-colliding only: the layout's own attribute
+		// wins on a key both define.
+		layoutBody := doc.Find(atom.Body.String())
+		for key, val := range data.bodyAttrs {
+			if _, exists := layoutBody.Attr(key); !exists {
+				layoutBody.SetAttr(key, val)
+			}
+		}
+	}
 	f, err := os.OpenFile(gen.BuildDeployPath(data.Path), os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.FileMode(ZAS_DEFAULT_FILE_PERM))
 	if err != nil {
 		return
@@ -122,7 +184,19 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	return
 }
 
+// maxEmbedDepth bounds how many levels of <embed> an entry file may nest.
+// Markdown and HTML embed handlers call back into parseAndReplace for
+// whatever they embed, so a file that embeds itself (directly, or through a
+// cycle of mutually-embedding files) would otherwise recurse until the
+// goroutine's stack is exhausted.
+const maxEmbedDepth = 20
+
 func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *goquery.Document, err error) {
+	if data.embedDepth >= maxEmbedDepth {
+		return nil, fmt.Errorf("embed nesting deeper than %d levels; check for a self- or mutually-embedding file", maxEmbedDepth)
+	}
+	data.embedDepth++
+	defer func() { data.embedDepth-- }()
 	// Here we manipulate its result.
 	doc, err = goquery.NewDocumentFromReader(&processed)
 	if err != nil {
@@ -321,7 +395,7 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
 	}
 	// This is going to haunt me for a while.
 	var b bytes.Buffer
-	if err := markdown.New(markdown.WithRendererOptions(htmlrenderer.WithUnsafe())).Convert(input, &b); err != nil {
+	if err := markdownConverter.Convert(input, &b); err != nil {
 		return err
 	}
 	md := []byte(html.UnescapeString(b.String()))
@@ -429,26 +503,26 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 			return
 		}
 		data.Body = thtml.HTML(strings.TrimSpace(bodyHTML))
+		if attrs := body.Get(0).Attr; len(attrs) > 0 {
+			data.bodyAttrs = make(map[string]string, len(attrs))
+			for _, a := range attrs {
+				data.bodyAttrs[a.Key] = a.Val
+			}
+		}
 	}
 	return gen.Generate(path, &data)
 }
 
 /*
- * Removes unnecessary paragraph HTML tags generated during Markdown processing by
- * deleting any <p> without child text nodes (just to avoid deletion if semantic tags
- * are inside).
+ * Removes <p> elements left completely empty by HTML5 parser error
+ * recovery: a block element written inline inside a Markdown paragraph
+ * implicitly closes it, and the parser synthesizes an empty <p></p> from
+ * the orphaned closing tag.
  */
 func (gen *Generator) cleanUnnecessaryPTags(doc *goquery.Document) {
 	doc.Find(atom.P.String()).Each(func(ix int, p *goquery.Selection) {
-		hasText := false
-		// Little heuristic to remove nodes with visually empty content.
-		content := strings.TrimSpace(p.Nodes[0].Data)
-		if content != "" {
-			hasText = true
-		}
-		// If current <p> tag doesn't have any child text node, extract children and add to its parent.
-		if !hasText {
-			p.ReplaceWithSelection(p.Children())
+		if p.Nodes[0].FirstChild == nil {
+			p.Remove()
 		}
 	})
 }
@@ -512,7 +586,7 @@ func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data
 			return err
 		}
 		var b bytes.Buffer
-		if err := markdown.New(markdown.WithRendererOptions(htmlrenderer.WithUnsafe())).Convert(mdInput, &b); err != nil {
+		if err := markdownConverter.Convert(mdInput, &b); err != nil {
 			return err
 		}
 		mdDoc, err := gen.parseAndReplace(b, data)
