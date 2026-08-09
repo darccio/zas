@@ -576,7 +576,7 @@ func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err
 			}
 			plugin := gen.resolveMIMETypePlugin(typ)
 			method := reflect.ValueOf(gen).MethodByName(cases.Title(language.English).String(plugin))
-			if method == reflect.ValueOf(nil) {
+			if !isEmbedPluginMethod(method) {
 				err = gen.handleMIMETypePlugin(e, doc)
 			} else {
 				args := make([]reflect.Value, 3)
@@ -596,6 +596,34 @@ func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err
 		return true
 	})
 	return
+}
+
+/*
+ * Reports whether method is a valid embed-plugin dispatch target: a method
+ * with the exact (e *goquery.Selection, doc *goquery.Document, data *ZasData) error
+ * signature. Config data chooses the method name (see resolveMIMETypePlugin),
+ * so any exported Generator method is reachable by MethodByName and must be
+ * shape-checked before Call to avoid a reflect panic on arity/type mismatch.
+ */
+func isEmbedPluginMethod(method reflect.Value) bool {
+	if !method.IsValid() {
+		return false
+	}
+	want := []reflect.Type{
+		reflect.TypeFor[*goquery.Selection](),
+		reflect.TypeFor[*goquery.Document](),
+		reflect.TypeFor[*ZasData](),
+	}
+	t := method.Type()
+	if t.NumIn() != len(want) || t.NumOut() != 1 {
+		return false
+	}
+	for i, w := range want {
+		if t.In(i) != w {
+			return false
+		}
+	}
+	return true
 }
 
 type bufErr struct {
