@@ -60,22 +60,26 @@ func NewConfig() (ConfigSection, error) {
  */
 func NewI18n(mainlang string) (i18n gt.Strings, err error) {
 	data, err := os.ReadFile(ZAS_I18N_FILE)
-	i18n = make(gt.Strings)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = nil
-			return
+			return make(gt.Strings), nil
 		}
-		i18n = nil
-		return
+		return nil, err
 	}
-	err = yaml.Unmarshal(data, &i18n)
+	i18n = make(gt.Strings)
+	if err = yaml.Unmarshal(data, &i18n); err != nil {
+		return nil, err
+	}
 	for k, v := range i18n {
+		if v == nil {
+			v = make(map[string]string)
+			i18n[k] = v
+		}
 		if _, ok := v[mainlang]; !ok {
 			v[mainlang] = k
 		}
 	}
-	return
+	return i18n, nil
 }
 
 /*
