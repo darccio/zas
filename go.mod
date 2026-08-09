@@ -3,7 +3,7 @@ module github.com/darccio/zas
 go 1.26.0
 
 require (
-	dario.cat/mergo v1.0.0
+	dario.cat/mergo v1.0.2
 	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/melvinmt/gt v1.0.1
 	github.com/yuin/goldmark v1.6.0
