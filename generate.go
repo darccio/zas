@@ -36,6 +36,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/melvinmt/gt"
 	markdown "github.com/yuin/goldmark"
+	htmlrenderer "github.com/yuin/goldmark/renderer/html"
 	html5 "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	"golang.org/x/text/cases"
@@ -320,7 +321,7 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
 	}
 	// This is going to haunt me for a while.
 	var b bytes.Buffer
-	if err := markdown.Convert(input, &b); err != nil {
+	if err := markdown.New(markdown.WithRendererOptions(htmlrenderer.WithUnsafe())).Convert(input, &b); err != nil {
 		return err
 	}
 	md := []byte(html.UnescapeString(b.String()))
@@ -422,12 +423,12 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 		return
 	}
 	if body.Size() > 0 {
-		var bbody bytes.Buffer
-		err = html5.Render(&bbody, body.Get(0))
-		if err != nil {
+		bodyHTML, bodyErr := body.Html()
+		if bodyErr != nil {
+			err = bodyErr
 			return
 		}
-		data.Body = thtml.HTML(bbody.Bytes())
+		data.Body = thtml.HTML(strings.TrimSpace(bodyHTML))
 	}
 	return gen.Generate(path, &data)
 }
@@ -511,7 +512,7 @@ func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data
 			return err
 		}
 		var b bytes.Buffer
-		if err := markdown.Convert(mdInput, &b); err != nil {
+		if err := markdown.New(markdown.WithRendererOptions(htmlrenderer.WithUnsafe())).Convert(mdInput, &b); err != nil {
 			return err
 		}
 		mdDoc, err := gen.parseAndReplace(b, data)
