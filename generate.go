@@ -160,6 +160,18 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	if err != nil {
 		return
 	}
+	if len(data.bodyAttrs) > 0 {
+		// Body only carries the source page's inner HTML, not its <body>
+		// element, so its attributes need to be merged onto the layout's
+		// <body> explicitly. Non-colliding only: the layout's own attribute
+		// wins on a key both define.
+		layoutBody := doc.Find(atom.Body.String())
+		for key, val := range data.bodyAttrs {
+			if _, exists := layoutBody.Attr(key); !exists {
+				layoutBody.SetAttr(key, val)
+			}
+		}
+	}
 	f, err := os.OpenFile(gen.BuildDeployPath(data.Path), os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.FileMode(ZAS_DEFAULT_FILE_PERM))
 	if err != nil {
 		return
@@ -479,6 +491,12 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 			return
 		}
 		data.Body = thtml.HTML(strings.TrimSpace(bodyHTML))
+		if attrs := body.Get(0).Attr; len(attrs) > 0 {
+			data.bodyAttrs = make(map[string]string, len(attrs))
+			for _, a := range attrs {
+				data.bodyAttrs[a.Key] = a.Val
+			}
+		}
 	}
 	return gen.Generate(path, &data)
 }

@@ -47,6 +47,10 @@ type ZasData struct {
 	config ConfigSection
 	// i18n helper
 	i18n *gt.Build
+	// Attributes from the source page's own <body> tag (if any), merged
+	// onto the layout's <body> element since Body only carries the source
+	// body's inner HTML, not the element itself.
+	bodyAttrs map[string]string
 }
 
 /*
