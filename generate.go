@@ -514,21 +514,15 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 }
 
 /*
- * Removes unnecessary paragraph HTML tags generated during Markdown processing by
- * deleting any <p> without child text nodes (just to avoid deletion if semantic tags
- * are inside).
+ * Removes <p> elements left completely empty by HTML5 parser error
+ * recovery: a block element written inline inside a Markdown paragraph
+ * implicitly closes it, and the parser synthesizes an empty <p></p> from
+ * the orphaned closing tag.
  */
 func (gen *Generator) cleanUnnecessaryPTags(doc *goquery.Document) {
 	doc.Find(atom.P.String()).Each(func(ix int, p *goquery.Selection) {
-		hasText := false
-		// Little heuristic to remove nodes with visually empty content.
-		content := strings.TrimSpace(p.Nodes[0].Data)
-		if content != "" {
-			hasText = true
-		}
-		// If current <p> tag doesn't have any child text node, extract children and add to its parent.
-		if !hasText {
-			p.ReplaceWithSelection(p.Children())
+		if p.Nodes[0].FirstChild == nil {
+			p.Remove()
 		}
 	})
 }
