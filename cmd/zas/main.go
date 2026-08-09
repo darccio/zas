@@ -39,8 +39,7 @@ var (
 	verbose, full *bool
 	cmdInit = zas.NewSubcommand("init", func() error {
 		i := zas.Init{}
-		i.Run()
-		return nil
+		return i.Run()
 	})
 	cmdGenerate = zas.NewSubcommand("generate", func() error {
 		g := zas.Generator{
