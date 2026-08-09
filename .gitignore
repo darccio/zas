@@ -1,31 +1,21 @@
-#### joe made this: https://goel.io/joe
-
 #####=== Go ===#####
 
-# Compiled Object files, Static and Dynamic libs (Shared Objects)
-*.o
-*.a
-*.so
+# Built binaries
+/zas
+/cmd/zas/zas
 
-# Folders
-_obj
-_test
-
-# Architecture specific extensions/prefixes
-*.[568vq]
-[568vq].out
-
-*.cgo1.go
-*.cgo2.c
-_cgo_defun.c
-_cgo_gotypes.go
-_cgo_export.*
-
-_testmain.go
-
-*.exe
+# Test and coverage artifacts
 *.test
 *.prof
+coverage.out
+
+# goreleaser output
+/dist/
+
+#####=== Zas ===#####
+
+# Local test site output
+.zas/deploy/
 
 #####=== Vim ===#####
 [._]*.s[a-w][a-z]
@@ -34,3 +24,6 @@ _testmain.go
 Session.vim
 .netrwhist
 *~
+
+#####=== OS ===#####
+.DS_Store

@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package zas
 
 import (
@@ -99,9 +100,7 @@ var markdownConverter = markdown.New(markdown.WithRendererOptions(
 	renderer.WithNodeRenderers(util.Prioritized(&rawHTMLRenderer{}, 100)),
 ))
 
-/*
- * Convenience type to group relevant rendering info.
- */
+// Generator groups relevant rendering info.
 type Generator struct {
 	// Verbose output.
 	Verbose bool
@@ -134,24 +133,19 @@ func (gen *Generator) recordErr(err error) {
 	gen.mu.Unlock()
 }
 
-/*
- * Returns deployment base path in config.
- */
+// GetDeployPath returns deployment base path in config.
 func (gen *Generator) GetDeployPath() string {
 	return gen.Config.GetZString("deploy")
 }
 
-/*
- * Builds deployment path for specific file pointed by path.
- */
+// BuildDeployPath builds deployment path for specific file pointed by path.
 func (gen *Generator) BuildDeployPath(path string) string {
 	return filepath.Join(gen.GetDeployPath(), path)
 }
 
-/*
- * Renders and writes current file "path" with context "data".
- */
-func (gen *Generator) Generate(path string, data *ZasData) (err error) {
+// Generate renders and writes the file at data.Path using the given
+// template context.
+func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
 	var processed bytes.Buffer
 	if err = gen.Layout.Execute(&processed, data); err != nil {
 		return
@@ -176,7 +170,11 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 	err = html5.Render(f, doc.Get(0))
 	if err != nil {
 		return
@@ -206,6 +204,8 @@ func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (do
 	return
 }
 
+// Run performs a full generation pass over the current directory,
+// rendering every source file into the configured deploy path.
 func (gen *Generator) Run() error {
 	cfg, err := NewConfig()
 	if err != nil {
@@ -295,19 +295,17 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	if err != nil {
 		return err
 	}
-	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || strings.Contains(path, fmt.Sprintf("%s/", ZAS_DIR)) {
+	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || strings.Contains(path, ZAS_DIR+"/") {
 		return
 	}
 	if info.IsDir() {
 		ierr = os.MkdirAll(gen.BuildDeployPath(path), os.FileMode(ZAS_DEFAULT_DIR_PERM))
-	} else {
-		if gen.sourceIsNewer(path, info) {
-			if gen.Verbose {
-				fmt.Println("+", path)
-			}
-			gen.wg.Add(1)
-			go gen.renderAsync(path)
+	} else if gen.sourceIsNewer(path, info) {
+		if gen.Verbose {
+			fmt.Println("+", path)
 		}
+		gen.wg.Add(1)
+		go gen.renderAsync(path)
 	}
 	return
 }
@@ -335,7 +333,7 @@ func (gen *Generator) renderAsync(path string) {
 /*
  * Real reaping function. Reaps all missing source files in current deployment path.
  */
-func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr error) {
+func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error) {
 	if err != nil {
 		return err
 	}
@@ -348,7 +346,7 @@ func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr err
 			sourcePath = strings.Replace(sourcePath, ".html", ".md", 1)
 			sourceNew, err := os.Open(sourcePath)
 			if err == nil {
-				sourceNew.Close()
+				_ = sourceNew.Close()
 				reap = false
 			}
 		}
@@ -356,10 +354,12 @@ func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr err
 			if gen.Verbose {
 				fmt.Println("-", sourcePath)
 			}
-			os.RemoveAll(path)
+			if rmErr := os.RemoveAll(path); rmErr != nil {
+				gen.recordErr(rmErr)
+			}
 		}
 	} else {
-		source.Close()
+		_ = source.Close()
 	}
 	return
 }
@@ -369,7 +369,7 @@ func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
 	if gen.Full {
 		return true
 	}
-	realpath := string(path)
+	realpath := path
 	if strings.HasSuffix(path, ".md") {
 		realpath = strings.Replace(path, ".md", ".html", 1)
 	}
@@ -377,7 +377,7 @@ func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
 	if err != nil {
 		return true
 	}
-	defer destination.Close()
+	defer func() { _ = destination.Close() }()
 	destinationInfo, err := destination.Stat()
 	if err != nil {
 		return true
@@ -520,7 +520,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
  * the orphaned closing tag.
  */
 func (gen *Generator) cleanUnnecessaryPTags(doc *goquery.Document) {
-	doc.Find(atom.P.String()).Each(func(ix int, p *goquery.Selection) {
+	doc.Find(atom.P.String()).Each(func(_ int, p *goquery.Selection) {
 		if p.Nodes[0].FirstChild == nil {
 			p.Remove()
 		}
@@ -566,20 +566,22 @@ func (gen *Generator) copy(dstPath, srcPath string) (err error) {
 	if err != nil {
 		return
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(ZAS_DEFAULT_FILE_PERM))
 	if err != nil {
 		return
 	}
-	defer dst.Close()
+	defer func() {
+		if cerr := dst.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 	_, err = io.Copy(dst, src)
 	return
 }
 
-/*
- * Embeds a Markdown file.
- */
-func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
+// Markdown embeds a Markdown file.
+func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
 		mdInput, err := os.ReadFile(src)
 		if err != nil {
@@ -598,10 +600,8 @@ func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data
 	return
 }
 
-/*
- * Embeds a plain text file.
- */
-func (gen *Generator) Plain(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
+// Plain embeds a plain text file.
+func (gen *Generator) Plain(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
 		var input []byte
 		input, err = os.ReadFile(src)
@@ -622,10 +622,8 @@ func (gen *Generator) Plain(e *goquery.Selection, doc *goquery.Document, data *Z
 	return
 }
 
-/*
- * Embeds a HTML file.
- */
-func (gen *Generator) Html(e *goquery.Selection, doc *goquery.Document, data *ZasData) (err error) {
+// Html embeds a HTML file.
+func (gen *Generator) Html(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
 		var input []byte
 		input, err = os.ReadFile(src)
@@ -648,7 +646,7 @@ func (gen *Generator) Html(e *goquery.Selection, doc *goquery.Document, data *Za
  * They can be handled with MIME type plugins or internal exported methods like Markdown.
  */
 func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err error) {
-	doc.Find(atom.Embed.String()).EachWithBreak(func(ix int, e *goquery.Selection) bool {
+	doc.Find(atom.Embed.String()).EachWithBreak(func(_ int, e *goquery.Selection) bool {
 		if src, ok := e.Attr(atom.Src.String()); ok {
 			var typ string
 			if typ, ok = e.Attr(atom.Type.String()); !ok {

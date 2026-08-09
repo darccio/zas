@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package zas
 
 import (
@@ -27,9 +28,7 @@ import (
 	"github.com/melvinmt/gt"
 )
 
-/*
- * Context data store used in templates.
- */
+// ZasData is the context data store used in templates.
 type ZasData struct {
 	// Template used as body from current file.
 	Body thtml.HTML
@@ -56,19 +55,16 @@ type ZasData struct {
 	embedDepth int
 }
 
-/*
- * Site configuration.
- *
- * They are required fields in order to complete social/semantic meta tags.
- */
+// ZasSiteData is the site configuration.
+//
+// They are required fields in order to complete social/semantic meta tags.
 type ZasSiteData struct {
 	BaseURL string
 	Image   string
 }
 
-/*
- * Current title, from page's config and first level header (H1), in this order.
- */
+// Title returns the current title, from page's config and first level
+// header (H1), in this order.
 func (zd *ZasData) Title() (title string) {
 	title, ok := zd.Page["title"].(string)
 	if !ok {
@@ -77,16 +73,13 @@ func (zd *ZasData) Title() (title string) {
 	return
 }
 
-/*
- * Builds URL from current configuration.
- */
+// URL builds the URL from current configuration.
 func (zd *ZasData) URL() string {
 	return fmt.Sprintf("%s%s", zd.Site.BaseURL, zd.Path)
 }
 
-/*
- * Helper template method to get any value from ZasData.config using pathes.
- */
+// Extra is a helper template method to get any value from ZasData.config
+// using paths.
 func (zd *ZasData) Extra(keypath string) (value string, err error) {
 	keypath = path.Clean(keypath)
 	if path.IsAbs(keypath) {
@@ -107,17 +100,16 @@ func (zd *ZasData) Extra(keypath string) (value string, err error) {
 	return
 }
 
+// Language returns the page's resolved language.
 func (zd *ZasData) Language() (string, error) {
 	return zd.Resolve("language")
 }
 
-/*
- * Resolves id from Page, then Directory, then site-wide Extra config, in
- * that order. Returns an error only when id is present in Page or Directory
- * but isn't a string (e.g. a page-config typo like "language:" with no
- * value, or a numeric value) — a genuinely absent key still falls back to
- * Extra's own lenient "" default.
- */
+// Resolve resolves id from Page, then Directory, then site-wide Extra
+// config, in that order. It returns an error only when id is present in
+// Page or Directory but isn't a string (e.g. a page-config typo like
+// "language:" with no value, or a numeric value) — a genuinely absent key
+// still falls back to Extra's own lenient "" default.
 func (zd *ZasData) Resolve(id string) (string, error) {
 	var (
 		value interface{}
@@ -129,7 +121,7 @@ func (zd *ZasData) Resolve(id string) (string, error) {
 			value, ok = zd.Directory[id]
 		}
 		if !ok {
-			s, _ := zd.Extra(fmt.Sprintf("/site/%s", id))
+			s, _ := zd.Extra("/site/" + id)
 			return s, nil
 		}
 	}
@@ -140,6 +132,8 @@ func (zd *ZasData) Resolve(id string) (string, error) {
 	return s, nil
 }
 
+// E translates s for the page's resolved language, falling back to
+// "**s**" when no translation is found.
 func (zd *ZasData) E(s string, a ...interface{}) (t string, err error) {
 	lang, err := zd.Language()
 	if err != nil {
@@ -154,11 +148,13 @@ func (zd *ZasData) E(s string, a ...interface{}) (t string, err error) {
 	return
 }
 
+// H is like E but returns the translation as trusted HTML.
 func (zd *ZasData) H(s string, a ...interface{}) (h thtml.HTML, err error) {
 	t, err := zd.E(s, a...)
 	return thtml.HTML(t), err
 }
 
+// IsHome reports whether the current page is the site's home page.
 func (zd *ZasData) IsHome() (bool, error) {
 	lang, err := zd.Language()
 	if err != nil {
@@ -167,12 +163,13 @@ func (zd *ZasData) IsHome() (bool, error) {
 	return zd.Path == "/index.html" || zd.Path == fmt.Sprintf("/%s/index.html", lang), nil
 }
 
+// NewZasData builds a ZasData for the page at filepath.
 func NewZasData(filepath string, gen *Generator) (data ZasData) {
 	// Any path must finish in ".html".
 	if strings.HasSuffix(filepath, ".md") {
-		filepath = strings.Replace(filepath, ".md", ".html", -1)
+		filepath = strings.ReplaceAll(filepath, ".md", ".html")
 	}
-	data.Path = fmt.Sprintf("/%s", filepath)
+	data.Path = "/" + filepath
 	data.config = gen.Config
 	// Each ZasData gets its own gt.Build sharing the (read-only, post-init)
 	// Index, so per-render SetTarget/Translate calls don't race or bleed
