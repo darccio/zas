@@ -216,6 +216,9 @@ func (gen *Generator) handleDeployPath(full bool) {
  * Real walking function. Handles all supported files and copy not supported ones in current deployment path.
  */
 func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error) {
+	if err != nil {
+		return err
+	}
 	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || strings.Contains(path, fmt.Sprintf("%s/", ZAS_DIR)) {
 		return
 	}
@@ -257,6 +260,9 @@ func (gen *Generator) renderAsync(path string) {
  * Real reaping function. Reaps all missing source files in current deployment path.
  */
 func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr error) {
+	if err != nil {
+		return err
+	}
 	sourcePath := strings.Replace(path, gen.GetDeployPath(), ".", 1)
 	source, err := os.Open(sourcePath)
 	// TODO it must clean directories too
