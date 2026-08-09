@@ -151,7 +151,13 @@ func NewZasData(filepath string, gen *Generator) (data ZasData) {
 	}
 	data.Path = fmt.Sprintf("/%s", filepath)
 	data.config = gen.Config
-	data.i18n = gen.I18n
+	// Each ZasData gets its own gt.Build sharing the (read-only, post-init)
+	// Index, so per-render SetTarget/Translate calls don't race or bleed
+	// across languages on a Build shared by every render goroutine.
+	data.i18n = &gt.Build{
+		Index:  gen.I18n.Index,
+		Origin: gen.I18n.Origin,
+	}
 	data.Site.BaseURL = gen.Config.GetSection("site").GetString("baseurl")
 	data.Site.Image = gen.Config.GetSection("site").GetString("image")
 	return
