@@ -63,6 +63,8 @@ type Generator struct {
 	I18n *gt.Build
 	// ZasDirectoryConfigs cache
 	cachedZasDirectoryConfigs map[string]ConfigSection
+	// Guards cachedZasDirectoryConfigs, read and written from many renderAsync goroutines.
+	dirConfigMu sync.Mutex
 
 	wg sync.WaitGroup
 
@@ -332,27 +334,46 @@ func (gen *Generator) renderHTML(path string) (err error) {
  * It must be a YAML file.
  */
 func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigSection, err error) {
-	var ok bool
 	path := filepath.Dir(currentpath)
-	if config, ok = gen.cachedZasDirectoryConfigs[path]; !ok {
-		data, err := os.ReadFile(fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE))
-		if err != nil {
-			// Maybe .zas.yml is in an upper directory (already cached or not),
-			// so we call this recursively.
-			// Unless we are at current working directory.
-			if path == "." {
-				return nil, err
-			}
-			return gen.loadZasDirectoryConfig(path)
-		}
-		config = make(ConfigSection)
-		_ = yaml.Unmarshal(data, &config)
-		if gen.cachedZasDirectoryConfigs == nil {
-			gen.cachedZasDirectoryConfigs = make(map[string]ConfigSection)
-		}
-		gen.cachedZasDirectoryConfigs[path] = config
+	if config, ok := gen.getCachedDirConfig(path); ok {
+		return config, nil
 	}
+	data, err := os.ReadFile(fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE))
+	if err != nil {
+		// Maybe .zas.yml is in an upper directory (already cached or not),
+		// so we call this recursively.
+		// Unless we are at current working directory.
+		if path == "." {
+			return nil, err
+		}
+		return gen.loadZasDirectoryConfig(path)
+	}
+	config = make(ConfigSection)
+	_ = yaml.Unmarshal(data, &config)
+	gen.setCachedDirConfig(path, config)
+	return config, nil
+}
+
+/*
+ * Reads cachedZasDirectoryConfigs, safe for concurrent use.
+ */
+func (gen *Generator) getCachedDirConfig(path string) (config ConfigSection, ok bool) {
+	gen.dirConfigMu.Lock()
+	defer gen.dirConfigMu.Unlock()
+	config, ok = gen.cachedZasDirectoryConfigs[path]
 	return
+}
+
+/*
+ * Writes cachedZasDirectoryConfigs, safe for concurrent use.
+ */
+func (gen *Generator) setCachedDirConfig(path string, config ConfigSection) {
+	gen.dirConfigMu.Lock()
+	defer gen.dirConfigMu.Unlock()
+	if gen.cachedZasDirectoryConfigs == nil {
+		gen.cachedZasDirectoryConfigs = make(map[string]ConfigSection)
+	}
+	gen.cachedZasDirectoryConfigs[path] = config
 }
 
 /*
