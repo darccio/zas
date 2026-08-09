@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package zas
 
 import (
@@ -27,15 +28,11 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-/*
- * Aliasing goyaml's default map type.
- */
+// ConfigSection aliases goyaml's default map type.
 type ConfigSection map[interface{}]interface{}
 
-/*
- * Loads ZAS_CONF_FILE (as defined in constants.go).
- * It must be a YAML file.
- */
+// NewConfig loads ZAS_CONF_FILE (as defined in constants.go).
+// It must be a YAML file.
 func NewConfig() (ConfigSection, error) {
 	data, err := os.ReadFile(ZAS_CONF_FILE)
 	if err != nil {
@@ -54,10 +51,8 @@ func NewConfig() (ConfigSection, error) {
 	return config, nil
 }
 
-/*
- * Loads ZAS_I18N_FILE (as defined in constants.go).
- * It must be a YAML file.
- */
+// NewI18n loads ZAS_I18N_FILE (as defined in constants.go).
+// It must be a YAML file.
 func NewI18n(mainlang string) (i18n gt.Strings, err error) {
 	data, err := os.ReadFile(ZAS_I18N_FILE)
 	if err != nil {
@@ -82,18 +77,14 @@ func NewI18n(mainlang string) (i18n gt.Strings, err error) {
 	return i18n, nil
 }
 
-/*
- * Returns a string value from current section.
- */
+// GetString returns a string value from current section.
 func (cs ConfigSection) GetString(key string) (value string) {
 	value, _ = cs[key].(string)
 	return
 }
 
-/*
- * Returns a subsection from current section, or nil if key is missing or
- * not a section.
- */
+// GetSection returns a subsection from current section, or nil if key is
+// missing or not a section.
 func (cs ConfigSection) GetSection(key string) (value ConfigSection) {
 	switch raw := cs[key].(type) {
 	case ConfigSection:
@@ -104,28 +95,32 @@ func (cs ConfigSection) GetSection(key string) (value ConfigSection) {
 	return
 }
 
-/*
- * Returns a string value from default Zas section.
- */
+// GetZString returns a string value from default Zas section.
 func (cs ConfigSection) GetZString(key string) string {
 	s := cs.GetSection(ZAS)
 	return s.GetString(key)
 }
 
+// Init implements the "init" subcommand, which scaffolds a new Zas
+// repository in the current directory.
 type Init struct{}
 
+// Run scaffolds ZAS_DIR and writes a default ZAS_CONF_FILE, overwriting
+// any existing one.
 func (i *Init) Run() error {
-	path, _ := filepath.Abs(ZAS_DIR)
-	if _, err := os.Stat(ZAS_DIR); os.IsNotExist(err) {
-		os.Mkdir(ZAS_DIR, os.FileMode(ZAS_DEFAULT_DIR_PERM))
+	path, err := filepath.Abs(ZAS_DIR)
+	if err != nil {
+		return err
+	}
+	if _, statErr := os.Stat(ZAS_DIR); os.IsNotExist(statErr) {
+		if err := os.Mkdir(ZAS_DIR, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
+			return err
+		}
 		fmt.Printf("Initialized empty %s repository in %s\n", ZAS_NAME, path)
 	} else {
 		fmt.Printf("Reinitialized existing %s repository in %s\n", ZAS_NAME, path)
 	}
-	var (
-		data []byte
-		err  error
-	)
+	var data []byte
 	// If default config variable has fields, we store it as ZAS_CONF_FILE (as defined in constants.go).
 	// It overwrites every time we invoke init subcommand.
 	if len(ZAS_DEFAULT_CONF) > 0 {

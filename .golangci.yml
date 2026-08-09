@@ -1,0 +1,41 @@
+version: "2"
+
+formatters:
+  enable:
+    - gofumpt
+    - gci
+
+linters:
+  default: standard
+  enable:
+    - revive
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - gocritic
+    - misspell
+    - nilerr
+    - perfsprint
+    - unconvert
+    - usestdlibvars
+  exclusions:
+    rules:
+      # ZAS_* are exported mutable vars forming the library's public API
+      # since the cmd/library split; renaming to CamelCase is a breaking
+      # change out of scope for a lint cleanup.
+      - path: constants.go
+        linters: [revive]
+        text: "don't use ALL_CAPS"
+      # generate.go dispatches embeds via
+      # reflect.MethodByName(cases.Title(...).String(plugin)), so the
+      # "html" mimetype must resolve to the literal method name Html.
+      # Renaming to HTML breaks that dispatch.
+      - path: generate.go
+        linters: [revive]
+        text: "method Html should be HTML"
+      # ZasData/ZasSiteData predate the cmd/library split and are public
+      # API; renaming to Data/SiteData is a breaking change out of scope
+      # here.
+      - path: data.go
+        linters: [revive]
+        text: "stutters"

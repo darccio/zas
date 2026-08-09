@@ -18,6 +18,8 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -37,7 +39,7 @@ var subcommands = []*zas.Subcommand{
 
 var (
 	verbose, full *bool
-	cmdInit = zas.NewSubcommand("init", func() error {
+	cmdInit       = zas.NewSubcommand("init", func() error {
 		i := zas.Init{}
 		return i.Run()
 	})
@@ -73,7 +75,12 @@ func main() {
 
 	for _, cmd := range subcommands {
 		if cmd.Name == command && cmd.Run != nil {
-			cmd.Flag.Parse(args[1:])
+			if err := cmd.Flag.Parse(args[1:]); err != nil {
+				if errors.Is(err, flag.ErrHelp) {
+					os.Exit(0)
+				}
+				os.Exit(2)
+			}
 
 			if err := cmd.Run(); err != nil {
 				fmt.Fprintf(os.Stderr, "fatal: %s\n", err)

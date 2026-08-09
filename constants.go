@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Zas.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package zas
 
 import (
@@ -25,11 +26,13 @@ import (
 	"golang.org/x/text/language"
 )
 
+// ZAS and the other identifiers below are exported mutable configuration
+// used by both the zas library and the cmd/zas CLI.
 var (
 	ZAS                   = "zas"
 	ZAS_PREFIX            = "zs"
 	ZAS_NAME              = cases.Title(language.English).String(ZAS)
-	ZAS_DIR               = fmt.Sprintf(".%s", ZAS)
+	ZAS_DIR               = "." + ZAS
 	ZAS_CONF_FILE         = filepath.Join(ZAS_DIR, "config.yml")
 	ZAS_I18N_FILE         = filepath.Join(ZAS_DIR, "i18n.yml")
 	ZAS_DIR_CONF_FILE     = fmt.Sprintf(".%s.yml", ZAS)
