@@ -184,7 +184,19 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	return
 }
 
+// maxEmbedDepth bounds how many levels of <embed> an entry file may nest.
+// Markdown and HTML embed handlers call back into parseAndReplace for
+// whatever they embed, so a file that embeds itself (directly, or through a
+// cycle of mutually-embedding files) would otherwise recurse until the
+// goroutine's stack is exhausted.
+const maxEmbedDepth = 20
+
 func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *goquery.Document, err error) {
+	if data.embedDepth >= maxEmbedDepth {
+		return nil, fmt.Errorf("embed nesting deeper than %d levels; check for a self- or mutually-embedding file", maxEmbedDepth)
+	}
+	data.embedDepth++
+	defer func() { data.embedDepth-- }()
 	// Here we manipulate its result.
 	doc, err = goquery.NewDocumentFromReader(&processed)
 	if err != nil {

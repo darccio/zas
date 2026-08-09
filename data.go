@@ -51,6 +51,9 @@ type ZasData struct {
 	// onto the layout's <body> element since Body only carries the source
 	// body's inner HTML, not the element itself.
 	bodyAttrs map[string]string
+	// Tracks embed nesting depth for this render, guarding against a self-
+	// or mutually-embedding file recursing without bound.
+	embedDepth int
 }
 
 /*
