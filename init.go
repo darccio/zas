@@ -86,22 +86,20 @@ func NewI18n(mainlang string) (i18n gt.Strings, err error) {
  * Returns a string value from current section.
  */
 func (cs ConfigSection) GetString(key string) (value string) {
-	raw := cs[key]
-	if raw == nil {
-		value = ""
-	} else {
-		value = raw.(string)
-	}
+	value, _ = cs[key].(string)
 	return
 }
 
 /*
- * Returns a subsection from current section.
+ * Returns a subsection from current section, or nil if key is missing or
+ * not a section.
  */
 func (cs ConfigSection) GetSection(key string) (value ConfigSection) {
-	var ok bool
-	if value, ok = cs[key].(ConfigSection); !ok {
-		value = ConfigSection(cs[key].(map[interface{}]interface{}))
+	switch raw := cs[key].(type) {
+	case ConfigSection:
+		value = raw
+	case map[interface{}]interface{}:
+		value = ConfigSection(raw)
 	}
 	return
 }
