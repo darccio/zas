@@ -37,16 +37,17 @@ var subcommands = []*zas.Subcommand{
 
 var (
 	verbose, full *bool
-	cmdInit = zas.NewSubcommand("init", func() {
+	cmdInit = zas.NewSubcommand("init", func() error {
 		i := zas.Init{}
 		i.Run()
+		return nil
 	})
-	cmdGenerate = zas.NewSubcommand("generate", func() {
+	cmdGenerate = zas.NewSubcommand("generate", func() error {
 		g := zas.Generator{
 			Verbose: *verbose,
 			Full:    *full,
 		}
-		g.Run()
+		return g.Run()
 	})
 )
 
@@ -74,7 +75,11 @@ func main() {
 	for _, cmd := range subcommands {
 		if cmd.Name == command && cmd.Run != nil {
 			cmd.Flag.Parse(args[1:])
-			cmd.Run()
+
+			if err := cmd.Run(); err != nil {
+				fmt.Fprintf(os.Stderr, "fatal: %s\n", err)
+				os.Exit(1)
+			}
 
 			os.Exit(0)
 		}
