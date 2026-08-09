@@ -107,7 +107,7 @@ mimetypes:
   text/yaml+myplugin: myplugin
 ```
 
-If Zas finds an embed tag with a type attribute set to `text/yaml+myplugin`, it will invoke `mzsmyplugin`. Zas expects to process the plugin's stdout as HTML. It also pipes stderr to the user's shell. Any plugin will be called passing the current file's path as an argument.
+If Zas finds an embed tag with a type attribute set to `text/yaml+myplugin`, it will invoke `mzsmyplugin`. Zas expects to process the plugin's stdout as HTML. It also pipes stderr to the user's shell. Any plugin will be called with the embed's `src` attribute as its only argument, resolved relative to the site's root rather than to the file containing the `<embed>` tag.
 
 ```html
 <embed src="navigation.md" type="text/markdown" />

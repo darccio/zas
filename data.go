@@ -139,11 +139,7 @@ func (zd *ZasData) E(s string, a ...interface{}) (t string, err error) {
 		return "", err
 	}
 	zd.i18n.SetTarget(lang)
-	if len(a) == 0 {
-		t, err = zd.i18n.Translate(s)
-	} else {
-		t, err = zd.i18n.Translate(s, a)
-	}
+	t, err = zd.i18n.Translate(s, a...)
 	if err != nil {
 		t = "**" + s + "**"
 		err = nil

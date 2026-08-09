@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	ttext "text/template"
@@ -398,7 +399,10 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	// Building context and rendering template.
 	data := NewZasData(path, gen)
 	data.Directory, _ = gen.loadZasDirectoryConfig(path)
-	if err = template.Execute(&processed, data); err != nil {
+	// Pass a pointer: text/template only sees pointer-receiver methods
+	// (Title, E, URL, ...) on an addressable value, and a plain "data" here
+	// is not addressable.
+	if err = template.Execute(&processed, &data); err != nil {
 		return
 	}
 	doc, err := gen.parseAndReplace(processed, &data)
@@ -538,8 +542,7 @@ func (gen *Generator) Plain(e *goquery.Selection, doc *goquery.Document, data *Z
 		if err = template.Execute(&processed, data); err != nil {
 			return
 		}
-		e.Parent().Nodes[0].Data = processed.String()
-		e.Remove()
+		e.ReplaceWithNodes(&html5.Node{Type: html5.TextNode, Data: processed.String()})
 	}
 	return
 }
@@ -580,7 +583,7 @@ func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err
 			plugin := gen.resolveMIMETypePlugin(typ)
 			method := reflect.ValueOf(gen).MethodByName(cases.Title(language.English).String(plugin))
 			if !isEmbedPluginMethod(method) {
-				err = gen.handleMIMETypePlugin(e, doc)
+				err = gen.handleMIMETypePlugin(e)
 			} else {
 				args := make([]reflect.Value, 3)
 				args[0] = reflect.ValueOf(e)
@@ -629,53 +632,39 @@ func isEmbedPluginMethod(method reflect.Value) bool {
 	return true
 }
 
-type bufErr struct {
-	buffer []byte
-	err    error
-}
+// pluginNameRe restricts resolved plugin names to safe exec.Command argv[0]
+// suffixes. Without it, a mimetypes entry like {text/x: "../../evil"} would
+// make exec.Command skip PATH lookup and run a path relative to the working
+// directory - and mimetypes config is repo content, so this closes a code
+// execution hole for anyone who can send a pull request.
+var pluginNameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 /*
- * Invokes a MIME type plugin based on current node's type attribute, passing src attribute's value
- * as argument. Subcommand's output is piped to Gokogiri through a buffer.
+ * Invokes a MIME type plugin based on current node's type attribute, passing
+ * src attribute's value as argument. Subcommand's stdout replaces the embed
+ * tag as HTML; stderr is passed through to the user's shell.
  */
-func (gen *Generator) handleMIMETypePlugin(e *goquery.Selection, doc *goquery.Document) (err error) {
-	var (
-		src, typ string
-		ok       bool
-	)
-	if src, ok = e.Attr(atom.Src.String()); ok {
-		return
+func (gen *Generator) handleMIMETypePlugin(e *goquery.Selection) error {
+	src, ok := e.Attr(atom.Src.String())
+	if !ok {
+		return errors.New("missing src attribute for embed")
 	}
-	if typ, ok = e.Attr(atom.Type.String()); ok {
-		return
+	typ, ok := e.Attr(atom.Type.String())
+	if !ok {
+		return fmt.Errorf("missing type attribute for embed %q", src)
 	}
 	cmdname := gen.resolveMIMETypePlugin(typ)
-	if cmdname == "" {
-		return
+	if !pluginNameRe.MatchString(cmdname) {
+		return fmt.Errorf("no valid plugin configured for embed type %q (src %q)", typ, src)
 	}
 	cmd := exec.Command(fmt.Sprintf("m%s%s", ZAS_PREFIX, cmdname), src)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return
-	}
 	cmd.Stderr = os.Stderr
-	c := make(chan bufErr)
-	go func() {
-		data, err := io.ReadAll(stdout)
-		c <- bufErr{data, err}
-	}()
-	if err = cmd.Start(); err != nil {
-		return
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("plugin m%s%s failed for %q: %w", ZAS_PREFIX, cmdname, src, err)
 	}
-	be := <-c
-	if err = cmd.Wait(); err != nil {
-		return
-	}
-	if be.err != nil {
-		return be.err
-	}
-	e.ReplaceWithHtml(string(be.buffer))
-	return
+	e.ReplaceWithHtml(string(out))
+	return nil
 }
 
 /*
