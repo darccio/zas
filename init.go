@@ -60,44 +60,46 @@ func NewConfig() (ConfigSection, error) {
  */
 func NewI18n(mainlang string) (i18n gt.Strings, err error) {
 	data, err := os.ReadFile(ZAS_I18N_FILE)
-	i18n = make(gt.Strings)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = nil
-			return
+			return make(gt.Strings), nil
 		}
-		i18n = nil
-		return
+		return nil, err
 	}
-	err = yaml.Unmarshal(data, &i18n)
+	i18n = make(gt.Strings)
+	if err = yaml.Unmarshal(data, &i18n); err != nil {
+		return nil, err
+	}
 	for k, v := range i18n {
+		if v == nil {
+			v = make(map[string]string)
+			i18n[k] = v
+		}
 		if _, ok := v[mainlang]; !ok {
 			v[mainlang] = k
 		}
 	}
-	return
+	return i18n, nil
 }
 
 /*
  * Returns a string value from current section.
  */
 func (cs ConfigSection) GetString(key string) (value string) {
-	raw := cs[key]
-	if raw == nil {
-		value = ""
-	} else {
-		value = raw.(string)
-	}
+	value, _ = cs[key].(string)
 	return
 }
 
 /*
- * Returns a subsection from current section.
+ * Returns a subsection from current section, or nil if key is missing or
+ * not a section.
  */
 func (cs ConfigSection) GetSection(key string) (value ConfigSection) {
-	var ok bool
-	if value, ok = cs[key].(ConfigSection); !ok {
-		value = ConfigSection(cs[key].(map[interface{}]interface{}))
+	switch raw := cs[key].(type) {
+	case ConfigSection:
+		value = raw
+	case map[interface{}]interface{}:
+		value = ConfigSection(raw)
 	}
 	return
 }
@@ -112,7 +114,7 @@ func (cs ConfigSection) GetZString(key string) string {
 
 type Init struct{}
 
-func (i *Init) Run() {
+func (i *Init) Run() error {
 	path, _ := filepath.Abs(ZAS_DIR)
 	if _, err := os.Stat(ZAS_DIR); os.IsNotExist(err) {
 		os.Mkdir(ZAS_DIR, os.FileMode(ZAS_DEFAULT_DIR_PERM))
@@ -128,10 +130,8 @@ func (i *Init) Run() {
 	// It overwrites every time we invoke init subcommand.
 	if len(ZAS_DEFAULT_CONF) > 0 {
 		if data, err = yaml.Marshal(&ZAS_DEFAULT_CONF); err != nil {
-			panic(err)
+			return err
 		}
 	}
-	if err := os.WriteFile(ZAS_CONF_FILE, data, os.FileMode(ZAS_DEFAULT_FILE_PERM)); err != nil {
-		panic(err)
-	}
+	return os.WriteFile(ZAS_CONF_FILE, data, os.FileMode(ZAS_DEFAULT_FILE_PERM))
 }

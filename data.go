@@ -100,11 +100,18 @@ func (zd *ZasData) Extra(keypath string) (value string, err error) {
 	return
 }
 
-func (zd *ZasData) Language() (language string) {
+func (zd *ZasData) Language() (string, error) {
 	return zd.Resolve("language")
 }
 
-func (zd *ZasData) Resolve(id string) string {
+/*
+ * Resolves id from Page, then Directory, then site-wide Extra config, in
+ * that order. Returns an error only when id is present in Page or Directory
+ * but isn't a string (e.g. a page-config typo like "language:" with no
+ * value, or a numeric value) — a genuinely absent key still falls back to
+ * Extra's own lenient "" default.
+ */
+func (zd *ZasData) Resolve(id string) (string, error) {
 	var (
 		value interface{}
 		ok    bool
@@ -115,15 +122,23 @@ func (zd *ZasData) Resolve(id string) string {
 			value, ok = zd.Directory[id]
 		}
 		if !ok {
-			value, _ = zd.Extra(fmt.Sprintf("/site/%s", id))
+			s, _ := zd.Extra(fmt.Sprintf("/site/%s", id))
+			return s, nil
 		}
 	}
-	return value.(string)
+	s, isString := value.(string)
+	if !isString {
+		return "", fmt.Errorf("config value %q must be a string, got %T", id, value)
+	}
+	return s, nil
 }
 
-func (zd *ZasData) E(s string, a ...interface{}) (t string) {
-	var err error
-	zd.i18n.SetTarget(zd.Language())
+func (zd *ZasData) E(s string, a ...interface{}) (t string, err error) {
+	lang, err := zd.Language()
+	if err != nil {
+		return "", err
+	}
+	zd.i18n.SetTarget(lang)
 	if len(a) == 0 {
 		t, err = zd.i18n.Translate(s)
 	} else {
@@ -136,12 +151,17 @@ func (zd *ZasData) E(s string, a ...interface{}) (t string) {
 	return
 }
 
-func (zd *ZasData) H(s string, a ...interface{}) (h thtml.HTML) {
-	return thtml.HTML(zd.E(s, a...))
+func (zd *ZasData) H(s string, a ...interface{}) (h thtml.HTML, err error) {
+	t, err := zd.E(s, a...)
+	return thtml.HTML(t), err
 }
 
-func (zd *ZasData) IsHome() bool {
-	return zd.Path == "/index.html" || zd.Path == fmt.Sprintf("/%s/index.html", zd.Language())
+func (zd *ZasData) IsHome() (bool, error) {
+	lang, err := zd.Language()
+	if err != nil {
+		return false, err
+	}
+	return zd.Path == "/index.html" || zd.Path == fmt.Sprintf("/%s/index.html", lang), nil
 }
 
 func NewZasData(filepath string, gen *Generator) (data ZasData) {
@@ -151,7 +171,13 @@ func NewZasData(filepath string, gen *Generator) (data ZasData) {
 	}
 	data.Path = fmt.Sprintf("/%s", filepath)
 	data.config = gen.Config
-	data.i18n = gen.I18n
+	// Each ZasData gets its own gt.Build sharing the (read-only, post-init)
+	// Index, so per-render SetTarget/Translate calls don't race or bleed
+	// across languages on a Build shared by every render goroutine.
+	data.i18n = &gt.Build{
+		Index:  gen.I18n.Index,
+		Origin: gen.I18n.Origin,
+	}
 	data.Site.BaseURL = gen.Config.GetSection("site").GetString("baseurl")
 	data.Site.Image = gen.Config.GetSection("site").GetString("image")
 	return

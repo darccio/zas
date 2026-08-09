@@ -63,12 +63,23 @@ type Generator struct {
 	I18n *gt.Build
 	// ZasDirectoryConfigs cache
 	cachedZasDirectoryConfigs map[string]ConfigSection
+	// Guards cachedZasDirectoryConfigs, read and written from many renderAsync goroutines.
+	dirConfigMu sync.Mutex
 
 	wg sync.WaitGroup
 
 	// Guards errs, which collects per-file render errors from renderAsync goroutines.
 	mu   sync.Mutex
 	errs []error
+}
+
+/*
+ * Records err for later aggregation, safe for concurrent use.
+ */
+func (gen *Generator) recordErr(err error) {
+	gen.mu.Lock()
+	gen.errs = append(gen.errs, err)
+	gen.mu.Unlock()
 }
 
 /*
@@ -133,6 +144,9 @@ func (gen *Generator) Run() error {
 	go gen.loadI18N()
 	go gen.handleDeployPath(gen.Full)
 	gen.wg.Wait()
+	if len(gen.errs) > 0 {
+		return errors.Join(gen.errs...)
+	}
 	// Walking function. It allows to bubble up any error from generator.
 	walk := func(path string, info os.FileInfo, err error) error {
 		return gen.walk(path, info, err)
@@ -163,7 +177,7 @@ func (gen *Generator) parseLayout() {
 
 	layout := gen.Config.GetZString("layout")
 	if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
-		panic(err)
+		gen.recordErr(err)
 	}
 }
 
@@ -173,7 +187,8 @@ func (gen *Generator) loadI18N() {
 	mainlang := gen.Config.GetSection("site").GetString("language")
 	i18nStrings, err := NewI18n(mainlang)
 	if err != nil {
-		panic(err)
+		gen.recordErr(err)
+		return
 	}
 	gen.I18n = &gt.Build{
 		Index:  i18nStrings,
@@ -188,11 +203,12 @@ func (gen *Generator) handleDeployPath(full bool) {
 	// If deployment path already exists, it must be deleted.
 	if _, err := os.Stat(deployPath); err == nil && full {
 		if err = os.RemoveAll(deployPath); err != nil {
-			panic(err)
+			gen.recordErr(err)
+			return
 		}
 	}
 	if err := os.MkdirAll(deployPath, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
-		panic(err)
+		gen.recordErr(err)
 	}
 }
 
@@ -200,6 +216,9 @@ func (gen *Generator) handleDeployPath(full bool) {
  * Real walking function. Handles all supported files and copy not supported ones in current deployment path.
  */
 func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error) {
+	if err != nil {
+		return err
+	}
 	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || strings.Contains(path, fmt.Sprintf("%s/", ZAS_DIR)) {
 		return
 	}
@@ -241,6 +260,9 @@ func (gen *Generator) renderAsync(path string) {
  * Real reaping function. Reaps all missing source files in current deployment path.
  */
 func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr error) {
+	if err != nil {
+		return err
+	}
 	sourcePath := strings.Replace(path, gen.GetDeployPath(), ".", 1)
 	source, err := os.Open(sourcePath)
 	// TODO it must clean directories too
@@ -280,7 +302,10 @@ func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
 		return true
 	}
 	defer destination.Close()
-	destinationInfo, _ := destination.Stat()
+	destinationInfo, err := destination.Stat()
+	if err != nil {
+		return true
+	}
 	return sourceInfo.ModTime().UnixNano() >= destinationInfo.ModTime().UnixNano()
 }
 
@@ -318,27 +343,46 @@ func (gen *Generator) renderHTML(path string) (err error) {
  * It must be a YAML file.
  */
 func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigSection, err error) {
-	var ok bool
 	path := filepath.Dir(currentpath)
-	if config, ok = gen.cachedZasDirectoryConfigs[path]; !ok {
-		data, err := os.ReadFile(fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE))
-		if err != nil {
-			// Maybe .zas.yml is in an upper directory (already cached or not),
-			// so we call this recursively.
-			// Unless we are at current working directory.
-			if path == "." {
-				return nil, err
-			}
-			return gen.loadZasDirectoryConfig(path)
-		}
-		config = make(ConfigSection)
-		_ = yaml.Unmarshal(data, &config)
-		if gen.cachedZasDirectoryConfigs == nil {
-			gen.cachedZasDirectoryConfigs = make(map[string]ConfigSection)
-		}
-		gen.cachedZasDirectoryConfigs[path] = config
+	if config, ok := gen.getCachedDirConfig(path); ok {
+		return config, nil
 	}
+	data, err := os.ReadFile(fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE))
+	if err != nil {
+		// Maybe .zas.yml is in an upper directory (already cached or not),
+		// so we call this recursively.
+		// Unless we are at current working directory.
+		if path == "." {
+			return nil, err
+		}
+		return gen.loadZasDirectoryConfig(path)
+	}
+	config = make(ConfigSection)
+	_ = yaml.Unmarshal(data, &config)
+	gen.setCachedDirConfig(path, config)
+	return config, nil
+}
+
+/*
+ * Reads cachedZasDirectoryConfigs, safe for concurrent use.
+ */
+func (gen *Generator) getCachedDirConfig(path string) (config ConfigSection, ok bool) {
+	gen.dirConfigMu.Lock()
+	defer gen.dirConfigMu.Unlock()
+	config, ok = gen.cachedZasDirectoryConfigs[path]
 	return
+}
+
+/*
+ * Writes cachedZasDirectoryConfigs, safe for concurrent use.
+ */
+func (gen *Generator) setCachedDirConfig(path string, config ConfigSection) {
+	gen.dirConfigMu.Lock()
+	defer gen.dirConfigMu.Unlock()
+	if gen.cachedZasDirectoryConfigs == nil {
+		gen.cachedZasDirectoryConfigs = make(map[string]ConfigSection)
+	}
+	gen.cachedZasDirectoryConfigs[path] = config
 }
 
 /*
@@ -535,7 +579,7 @@ func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err
 			}
 			plugin := gen.resolveMIMETypePlugin(typ)
 			method := reflect.ValueOf(gen).MethodByName(cases.Title(language.English).String(plugin))
-			if method == reflect.ValueOf(nil) {
+			if !isEmbedPluginMethod(method) {
 				err = gen.handleMIMETypePlugin(e, doc)
 			} else {
 				args := make([]reflect.Value, 3)
@@ -555,6 +599,34 @@ func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err
 		return true
 	})
 	return
+}
+
+/*
+ * Reports whether method is a valid embed-plugin dispatch target: a method
+ * with the exact (e *goquery.Selection, doc *goquery.Document, data *ZasData) error
+ * signature. Config data chooses the method name (see resolveMIMETypePlugin),
+ * so any exported Generator method is reachable by MethodByName and must be
+ * shape-checked before Call to avoid a reflect panic on arity/type mismatch.
+ */
+func isEmbedPluginMethod(method reflect.Value) bool {
+	if !method.IsValid() {
+		return false
+	}
+	want := []reflect.Type{
+		reflect.TypeFor[*goquery.Selection](),
+		reflect.TypeFor[*goquery.Document](),
+		reflect.TypeFor[*ZasData](),
+	}
+	t := method.Type()
+	if t.NumIn() != len(want) || t.NumOut() != 1 {
+		return false
+	}
+	for i, w := range want {
+		if t.In(i) != w {
+			return false
+		}
+	}
+	return true
 }
 
 type bufErr struct {
