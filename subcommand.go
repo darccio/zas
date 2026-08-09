@@ -13,7 +13,7 @@ import (
 type Subcommand struct {
 	// Runs the subcommand
 	// The args are the arguments after the subcommand name.
-	Run func()
+	Run func() error
 
 	// UsageLine is the one-line usage message.
 	// The first word in the line is taken to be the subcommand name.
@@ -26,7 +26,7 @@ type Subcommand struct {
 	Flag flag.FlagSet
 }
 
-func NewSubcommand(usageLine string, run func()) *Subcommand {
+func NewSubcommand(usageLine string, run func() error) *Subcommand {
 	data := strings.SplitN(usageLine, " ", 2)
 	return &Subcommand{
 		UsageLine: usageLine,
