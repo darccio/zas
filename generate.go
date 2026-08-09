@@ -72,6 +72,15 @@ type Generator struct {
 }
 
 /*
+ * Records err for later aggregation, safe for concurrent use.
+ */
+func (gen *Generator) recordErr(err error) {
+	gen.mu.Lock()
+	gen.errs = append(gen.errs, err)
+	gen.mu.Unlock()
+}
+
+/*
  * Returns deployment base path in config.
  */
 func (gen *Generator) GetDeployPath() string {
@@ -133,6 +142,9 @@ func (gen *Generator) Run() error {
 	go gen.loadI18N()
 	go gen.handleDeployPath(gen.Full)
 	gen.wg.Wait()
+	if len(gen.errs) > 0 {
+		return errors.Join(gen.errs...)
+	}
 	// Walking function. It allows to bubble up any error from generator.
 	walk := func(path string, info os.FileInfo, err error) error {
 		return gen.walk(path, info, err)
@@ -163,7 +175,7 @@ func (gen *Generator) parseLayout() {
 
 	layout := gen.Config.GetZString("layout")
 	if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
-		panic(err)
+		gen.recordErr(err)
 	}
 }
 
@@ -173,7 +185,8 @@ func (gen *Generator) loadI18N() {
 	mainlang := gen.Config.GetSection("site").GetString("language")
 	i18nStrings, err := NewI18n(mainlang)
 	if err != nil {
-		panic(err)
+		gen.recordErr(err)
+		return
 	}
 	gen.I18n = &gt.Build{
 		Index:  i18nStrings,
@@ -188,11 +201,12 @@ func (gen *Generator) handleDeployPath(full bool) {
 	// If deployment path already exists, it must be deleted.
 	if _, err := os.Stat(deployPath); err == nil && full {
 		if err = os.RemoveAll(deployPath); err != nil {
-			panic(err)
+			gen.recordErr(err)
+			return
 		}
 	}
 	if err := os.MkdirAll(deployPath, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
-		panic(err)
+		gen.recordErr(err)
 	}
 }
 
