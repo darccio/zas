@@ -538,8 +538,7 @@ func (gen *Generator) Plain(e *goquery.Selection, doc *goquery.Document, data *Z
 		if err = template.Execute(&processed, data); err != nil {
 			return
 		}
-		e.Parent().Nodes[0].Data = processed.String()
-		e.Remove()
+		e.ReplaceWithNodes(&html5.Node{Type: html5.TextNode, Data: processed.String()})
 	}
 	return
 }
