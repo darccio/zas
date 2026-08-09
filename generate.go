@@ -302,7 +302,10 @@ func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
 		return true
 	}
 	defer destination.Close()
-	destinationInfo, _ := destination.Stat()
+	destinationInfo, err := destination.Stat()
+	if err != nil {
+		return true
+	}
 	return sourceInfo.ModTime().UnixNano() >= destinationInfo.ModTime().UnixNano()
 }
 
