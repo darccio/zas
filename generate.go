@@ -19,6 +19,7 @@ package zas
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"html"
 	thtml "html/template"
@@ -64,6 +65,10 @@ type Generator struct {
 	cachedZasDirectoryConfigs map[string]ConfigSection
 
 	wg sync.WaitGroup
+
+	// Guards errs, which collects per-file render errors from renderAsync goroutines.
+	mu   sync.Mutex
+	errs []error
 }
 
 /*
@@ -118,8 +123,7 @@ func (gen *Generator) Run() error {
 	cfg, err := NewConfig()
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Printf("fatal: Not a valid Zas repository: %s\n", err)
-			return err
+			return fmt.Errorf("not a valid Zas repository: %w", err)
 		}
 		return err
 	}
@@ -146,6 +150,9 @@ func (gen *Generator) Run() error {
 		if err = filepath.Walk(gen.GetDeployPath(), reapwalk); err != nil {
 			return err
 		}
+	}
+	if len(gen.errs) > 0 {
+		return errors.Join(gen.errs...)
 	}
 	return nil
 }
@@ -224,7 +231,9 @@ func (gen *Generator) renderAsync(path string) {
 	}
 
 	if err != nil {
-		fmt.Printf("fatal: %s => %s\n", path, err)
+		gen.mu.Lock()
+		gen.errs = append(gen.errs, fmt.Errorf("%s: %w", path, err))
+		gen.mu.Unlock()
 	}
 }
 

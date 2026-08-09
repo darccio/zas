@@ -1,6 +1,6 @@
 module github.com/darccio/zas
 
-go 1.20
+go 1.26
 
 require (
 	dario.cat/mergo v1.0.0
