@@ -398,7 +398,10 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	// Building context and rendering template.
 	data := NewZasData(path, gen)
 	data.Directory, _ = gen.loadZasDirectoryConfig(path)
-	if err = template.Execute(&processed, data); err != nil {
+	// Pass a pointer: text/template only sees pointer-receiver methods
+	// (Title, E, URL, ...) on an addressable value, and a plain "data" here
+	// is not addressable.
+	if err = template.Execute(&processed, &data); err != nil {
 		return
 	}
 	doc, err := gen.parseAndReplace(processed, &data)
