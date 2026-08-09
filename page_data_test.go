@@ -52,7 +52,7 @@ func TestRenderPageBodyCanCallPointerReceiverMethod(t *testing.T) {
 	}
 	gen.Layout = layout
 
-	if err := gen.render("page.html", []byte(`<body>{{.URL}}</body>`)); err != nil {
+	if err := gen.render("page.html", []byte(`<body>{{.URL}}</body>`), nil); err != nil {
 		t.Fatalf("render() error = %v, want nil", err)
 	}
 

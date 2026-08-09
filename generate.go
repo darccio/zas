@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"html"
 	thtml "html/template"
 	"io"
 	"os"
@@ -156,7 +155,7 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 	if err = gen.Layout.Execute(&processed, data); err != nil {
 		return
 	}
-	doc, err := gen.parseAndReplace(processed, data)
+	doc, err := gen.parseAndReplace(&processed, data)
 	if err != nil {
 		return
 	}
@@ -191,14 +190,14 @@ func (gen *Generator) Generate(path string, data *ZasData) (err error) {
 // goroutine's stack is exhausted.
 const maxEmbedDepth = 20
 
-func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *goquery.Document, err error) {
+func (gen *Generator) parseAndReplace(r io.Reader, data *ZasData) (doc *goquery.Document, err error) {
 	if data.embedDepth >= maxEmbedDepth {
 		return nil, fmt.Errorf("embed nesting deeper than %d levels; check for a self- or mutually-embedding file", maxEmbedDepth)
 	}
 	data.embedDepth++
 	defer func() { data.embedDepth-- }()
 	// Here we manipulate its result.
-	doc, err = goquery.NewDocumentFromReader(&processed)
+	doc, err = goquery.NewDocumentFromReader(r)
 	if err != nil {
 		return
 	}
@@ -393,13 +392,7 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
 	if err != nil {
 		return
 	}
-	// This is going to haunt me for a while.
-	var b bytes.Buffer
-	if err := markdownConverter.Convert(input, &b); err != nil {
-		return err
-	}
-	md := []byte(html.UnescapeString(b.String()))
-	return gen.render(path, md)
+	return gen.render(path, input, markdownToHTML)
 }
 
 /*
@@ -410,7 +403,20 @@ func (gen *Generator) renderHTML(path string) (err error) {
 	if err != nil {
 		return
 	}
-	return gen.render(path, input)
+	return gen.render(path, input, nil)
+}
+
+/*
+ * Converts Markdown source to HTML. Used as render's convert step, so it
+ * runs after the Go template pass instead of before - template actions are
+ * written in the author's own syntax, not in goldmark's escaped output.
+ */
+func markdownToHTML(src []byte) ([]byte, error) {
+	var b bytes.Buffer
+	if err := markdownConverter.Convert(src, &b); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
 }
 
 /*
@@ -462,11 +468,13 @@ func (gen *Generator) setCachedDirConfig(path string, config ConfigSection) {
 }
 
 /*
- * Generic render function. It expects input to be a valid HTML document.
- * Input can be a valid Go template.
+ * Generic render function. input is executed as a Go template first, then -
+ * if convert is non-nil - converted to HTML (e.g. from Markdown). Templates
+ * therefore run against the author's own source syntax rather than against
+ * already-converted HTML.
  */
-func (gen *Generator) render(path string, input []byte) (err error) {
-	template, err := ttext.New("current").Parse(string(input))
+func (gen *Generator) render(path string, input []byte, convert func([]byte) ([]byte, error)) (err error) {
+	template, err := ttext.New(path).Parse(string(input))
 	if err != nil {
 		return
 	}
@@ -480,7 +488,13 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	if err = template.Execute(&processed, &data); err != nil {
 		return
 	}
-	doc, err := gen.parseAndReplace(processed, &data)
+	content := processed.Bytes()
+	if convert != nil {
+		if content, err = convert(content); err != nil {
+			return
+		}
+	}
+	doc, err := gen.parseAndReplace(bytes.NewReader(content), &data)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -589,7 +603,7 @@ func (gen *Generator) Markdown(e *goquery.Selection, doc *goquery.Document, data
 		if err := markdownConverter.Convert(mdInput, &b); err != nil {
 			return err
 		}
-		mdDoc, err := gen.parseAndReplace(b, data)
+		mdDoc, err := gen.parseAndReplace(&b, data)
 		if err != nil {
 			return err
 		}
@@ -633,7 +647,7 @@ func (gen *Generator) Html(e *goquery.Selection, doc *goquery.Document, data *Za
 			return err
 		}
 		var htmlDoc *goquery.Document
-		htmlDoc, err = gen.parseAndReplace(*bytes.NewBuffer(input), data)
+		htmlDoc, err = gen.parseAndReplace(bytes.NewReader(input), data)
 		if err != nil {
 			return
 		}

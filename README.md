@@ -172,6 +172,8 @@ Keep in mind that any file will be treated as a Go text template before any furt
 * `{{.Resolve id}}`: indirect access to site, directory and page config. It works with simple keys (no paths), checking for them in page, directory and site config (as `/site/<id>`), in this order.
 * `{{.Language}}`: file current language, if defined in the first comment (as YAML property `language`). By default, `/site/language` value.
 
+For Markdown files, templates run against the `.md` source itself, before Markdown conversion. This means a template action's output - including a translated string from `{{.E}}` or `{{.H}}` - is Markdown source too: characters like `*`, `_`, `#`, or a leading `-`/digit-`.` are interpreted as formatting once conversion runs, and a blank line produced by a control action (`{{if}}`, `{{range}}`, ...) can split a paragraph, list, or table the same as a literal blank line would. Use `{{-` / `-}}` to trim stray whitespace from control actions when that matters.
+
 ### What about layout.html?
 
 It is plain HTML. No frills. Just add a placeholder `{{.Body}}` in your template.

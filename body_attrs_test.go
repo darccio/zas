@@ -33,7 +33,7 @@ func TestRenderPreservesSourceBodyAttributes(t *testing.T) {
 	gen.Layout = layout
 
 	src := `<body id="special" data-x="1" class="source">content</body>`
-	if err := gen.render("page.html", []byte(src)); err != nil {
+	if err := gen.render("page.html", []byte(src), nil); err != nil {
 		t.Fatalf("render() error = %v, want nil", err)
 	}
 
@@ -67,7 +67,7 @@ func TestRenderWithoutSourceBodyAttributesLeavesLayoutUnchanged(t *testing.T) {
 	}
 	gen.Layout = layout
 
-	if err := gen.render("page.html", []byte(`<body>content</body>`)); err != nil {
+	if err := gen.render("page.html", []byte(`<body>content</body>`), nil); err != nil {
 		t.Fatalf("render() error = %v, want nil", err)
 	}
 
