@@ -310,7 +310,10 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 		return err
 	}
 	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || strings.Contains(path, ZAS_DIR+"/") {
-		return
+		if path != "." && info.IsDir() {
+			return filepath.SkipDir
+		}
+		return nil
 	}
 	if info.IsDir() {
 		ierr = os.MkdirAll(gen.BuildDeployPath(path), os.FileMode(ZAS_DEFAULT_DIR_PERM))
