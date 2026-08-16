@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"html"
 	thtml "html/template"
 	"io"
 	"os"
@@ -393,13 +392,17 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
 	if err != nil {
 		return
 	}
-	// This is going to haunt me for a while.
 	var b bytes.Buffer
 	if err := markdownConverter.Convert(input, &b); err != nil {
 		return err
 	}
-	md := []byte(html.UnescapeString(b.String()))
-	return gen.render(path, md)
+	// Do not unescape the converter's output here: goldmark escapes code
+	// block contents (and rawHTMLRenderer above already passes raw HTML
+	// through verbatim), so unescaping would let HTML entities inside a
+	// fenced or indented code block turn back into real elements once
+	// parseAndReplace re-parses this as HTML - including a <script> tag
+	// becoming a live, executing script.
+	return gen.render(path, b.Bytes())
 }
 
 /*

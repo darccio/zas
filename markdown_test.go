@@ -94,3 +94,17 @@ func TestMarkdownSanitizesDangerousImageURL(t *testing.T) {
 		t.Fatalf("output = %q, want an empty src for a sanitized destination", out)
 	}
 }
+
+func TestMarkdownFencedCodeBlockGetsLanguageClass(t *testing.T) {
+	out := convertMarkdown(t, "```go\nfmt.Println(1)\n```\n")
+	if !strings.Contains(out, `<pre><code class="language-go">`) {
+		t.Fatalf("output = %q, want a fenced code block with a language-go class", out)
+	}
+}
+
+func TestMarkdownIndentedCodeBlockRenders(t *testing.T) {
+	out := convertMarkdown(t, "    fmt.Println(1)\n")
+	if !strings.Contains(out, "<pre><code>") {
+		t.Fatalf("output = %q, want an indented code block wrapped in <pre><code>", out)
+	}
+}
