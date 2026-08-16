@@ -175,6 +175,25 @@ func TestGenerateExtensionLikeDirectoryNotCorrupted(t *testing.T) {
 	assertDeployHas(t, filepath.Join("v1.mdx", "page.html"))
 }
 
+// TestGenerateDirNameEndingInZasDirNotExcluded is a regression test: a
+// source directory whose name merely ends in ZAS_DIR (".zas"), such as
+// "docs.zas", used to be silently excluded from generation because the
+// walk's exclusion check matched the substring ".zas/" anywhere in the
+// path, not just the real ".zas" directory.
+func TestGenerateDirNameEndingInZasDirNotExcluded(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.MkdirAll("docs.zas", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("docs.zas", "page.md"), []byte("# Page\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := generate(t); err != nil {
+		t.Fatalf("generate() error = %v, want nil", err)
+	}
+	assertDeployHas(t, filepath.Join("docs.zas", "page.html"))
+}
+
 func TestGenerateSkipsNestedHiddenDirectory(t *testing.T) {
 	newTestSite(t, "site")
 	if err := os.MkdirAll(filepath.Join("sect", ".hidden"), 0o755); err != nil {

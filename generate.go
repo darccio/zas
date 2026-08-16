@@ -302,6 +302,15 @@ func (gen *Generator) handleDeployPath(full bool) {
 	}
 }
 
+func pathHasComponent(path, component string) bool {
+	for _, part := range strings.Split(path, string(filepath.Separator)) {
+		if part == component {
+			return true
+		}
+	}
+	return false
+}
+
 /*
  * Real walking function. Handles all supported files and copy not supported ones in current deployment path.
  */
@@ -309,7 +318,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	if err != nil {
 		return err
 	}
-	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || strings.Contains(path, ZAS_DIR+"/") ||
+	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || pathHasComponent(path, ZAS_DIR) ||
 		path == gen.GetDeployPath() || path == gen.Config.GetZString("layout") {
 		if path != "." && info.IsDir() {
 			return filepath.SkipDir
