@@ -175,6 +175,26 @@ func TestGenerateExtensionLikeDirectoryNotCorrupted(t *testing.T) {
 	assertDeployHas(t, filepath.Join("v1.mdx", "page.html"))
 }
 
+func TestGenerateSkipsNestedHiddenDirectory(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.MkdirAll(filepath.Join("sect", ".hidden"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("sect", "index.md"), []byte("# Sect\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("sect", ".hidden", "page.md"), []byte("# Hidden\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := generate(t); err != nil {
+		t.Fatalf("generate() error = %v, want nil", err)
+	}
+	assertDeployHas(t, filepath.Join("sect", "index.html"))
+	assertDeployMissing(t, filepath.Join("sect", ".hidden"))
+	assertDeployMissing(t, filepath.Join("sect", ".hidden", "page.html"))
+	assertDeployMissing(t, ".zas")
+}
+
 func TestGenerateFailsOutsideRepository(t *testing.T) {
 	t.Chdir(t.TempDir())
 	err := generate(t)
