@@ -17,6 +17,9 @@ coverage.out
 # Local test site output
 .zas/deploy/
 
+# Local working notes
+/docs/
+
 #####=== Vim ===#####
 [._]*.s[a-w][a-z]
 [._]s[a-w][a-z]
