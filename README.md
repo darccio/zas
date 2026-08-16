@@ -158,7 +158,9 @@ drwxr-xr-x  7 Dario  staff  238 30 mar 16:19 ..
 
 All .md files will be converted to HTML and copied in `.zas/deploy` using `.zas/layout.html` as layout and copying any other files and their structure. The former is also true for HTML files.
 
-Keep in mind that any file will be treated as a Go text template before any further processing. You have access to these fields and methods from anywhere:
+Fenced and indented code blocks are rendered as `<pre><code>`, with a fence's info string (e.g. ` ```go `) becoming a `class="language-go"` on the `<code>` element. There is no syntax highlighting built in; style or highlight that class yourself if you want one.
+
+Keep in mind that any file will be treated as a Go text template before any further processing, **including the contents of code blocks**: `{{...}}` inside a fenced or indented block is executed as a template, not shown literally. To display literal double braces, write `{{"{{"}}`. You have access to these fields and methods from anywhere:
 
 * `{{.Body}}`: the file itself in HTML.
 * `{{.Title}}`: autodetected title (first H1 header in file), overridden by `title` property in page's config.
