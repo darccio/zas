@@ -146,6 +146,17 @@ func (gen *Generator) BuildDeployPath(path string) string {
 	return filepath.Join(gen.GetDeployPath(), path)
 }
 
+// swapExtension replaces path's trailing from extension with to. Paths not
+// ending in from are returned unchanged. Unlike strings.Replace/ReplaceAll,
+// this only ever touches the extension, never a from/to occurrence earlier
+// in path.
+func swapExtension(path, from, to string) string {
+	if !strings.HasSuffix(path, from) {
+		return path
+	}
+	return strings.TrimSuffix(path, from) + to
+}
+
 // Generate renders and writes the file at data.Path using the given
 // template context.
 func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
@@ -354,7 +365,7 @@ func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error)
 	if err != nil {
 		reap := true
 		if strings.HasSuffix(sourcePath, ".html") {
-			sourcePath = strings.Replace(sourcePath, ".html", ".md", 1)
+			sourcePath = swapExtension(sourcePath, ".html", ".md")
 			sourceNew, err := os.Open(sourcePath)
 			if err == nil {
 				_ = sourceNew.Close()
@@ -385,10 +396,7 @@ func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
 	if gen.Full {
 		return true
 	}
-	realpath := path
-	if strings.HasSuffix(path, ".md") {
-		realpath = strings.Replace(path, ".md", ".html", 1)
-	}
+	realpath := swapExtension(path, ".md", ".html")
 	destination, err := os.Open(gen.BuildDeployPath(realpath))
 	if err != nil {
 		return true

@@ -145,6 +145,36 @@ func TestGenerateIncrementalReapsRemovedDirectory(t *testing.T) {
 	assertDeployMissing(t, filepath.Join("sect", "more.html"))
 }
 
+func TestGenerateHTMLDotMDSurvivesIncrementalRun(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.WriteFile("x.html.md", []byte("# X\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := generate(t, fullGen); err != nil {
+		t.Fatalf("first generate() error = %v, want nil", err)
+	}
+	assertDeployHas(t, "x.html.html")
+
+	if err := generate(t); err != nil {
+		t.Fatalf("incremental generate() error = %v, want nil", err)
+	}
+	assertDeployHas(t, "x.html.html")
+}
+
+func TestGenerateExtensionLikeDirectoryNotCorrupted(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.MkdirAll("v1.mdx", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("v1.mdx", "page.md"), []byte("# Page\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := generate(t); err != nil {
+		t.Fatalf("generate() error = %v, want nil", err)
+	}
+	assertDeployHas(t, filepath.Join("v1.mdx", "page.html"))
+}
+
 func TestGenerateFailsOutsideRepository(t *testing.T) {
 	t.Chdir(t.TempDir())
 	err := generate(t)

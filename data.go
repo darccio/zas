@@ -166,9 +166,7 @@ func (zd *ZasData) IsHome() (bool, error) {
 // NewZasData builds a ZasData for the page at filepath.
 func NewZasData(filepath string, gen *Generator) (data ZasData) {
 	// Any path must finish in ".html".
-	if strings.HasSuffix(filepath, ".md") {
-		filepath = strings.ReplaceAll(filepath, ".md", ".html")
-	}
+	filepath = swapExtension(filepath, ".md", ".html")
 	data.Path = "/" + filepath
 	data.config = gen.Config
 	// Each ZasData gets its own gt.Build sharing the (read-only, post-init)
