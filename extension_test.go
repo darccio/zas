@@ -2,7 +2,7 @@ package zas
 
 import "testing"
 
-// E1: sourceIsNewer, NewZasData, and reaper each swapped .md/.html
+// sourceIsNewer, NewZasData, and reaper each used to swap .md/.html
 // extensions with strings.Replace/ReplaceAll on the whole path string,
 // instead of anchoring on the trailing extension - and disagreed with each
 // other on occurrence count while doing it. swapExtension is the single
