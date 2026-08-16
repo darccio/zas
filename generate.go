@@ -121,6 +121,10 @@ type Generator struct {
 	// Guards errs, which collects per-file render errors from renderAsync goroutines.
 	mu   sync.Mutex
 	errs []error
+
+	// reapedDirs holds deploy paths reaper has RemoveAll'd during the
+	// current reap walk. The reap walk is single-threaded, so no mutex.
+	reapedDirs map[string]struct{}
 }
 
 /*
@@ -334,6 +338,14 @@ func (gen *Generator) renderAsync(path string) {
  */
 func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error) {
 	if err != nil {
+		// filepath.Walk lists a directory's children before invoking this
+		// callback for the directory itself, so RemoveAll below leaves Walk
+		// holding a stale child list for path's parent; the lstat it then
+		// retries on each child surfaces here as a not-exist error we
+		// already caused by reaping the parent.
+		if _, ok := gen.reapedDirs[filepath.Dir(path)]; ok && os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	sourcePath := strings.Replace(path, gen.GetDeployPath(), ".", 1)
@@ -355,6 +367,11 @@ func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error)
 			}
 			if rmErr := os.RemoveAll(path); rmErr != nil {
 				gen.recordErr(rmErr)
+			} else {
+				if gen.reapedDirs == nil {
+					gen.reapedDirs = make(map[string]struct{})
+				}
+				gen.reapedDirs[path] = struct{}{}
 			}
 		}
 	} else {

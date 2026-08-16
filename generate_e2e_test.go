@@ -117,6 +117,34 @@ func TestGenerateFullRebuilds(t *testing.T) {
 	assertDeployHas(t, "index.html")
 }
 
+func TestGenerateIncrementalReapsRemovedDirectory(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.MkdirAll("sect", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("sect", "index.md"), []byte("# Sect\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("sect", "more.md"), []byte("# More\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := generate(t, fullGen); err != nil {
+		t.Fatalf("first generate() error = %v, want nil", err)
+	}
+	assertDeployHas(t, filepath.Join("sect", "index.html"))
+	assertDeployHas(t, filepath.Join("sect", "more.html"))
+
+	if err := os.RemoveAll("sect"); err != nil {
+		t.Fatal(err)
+	}
+	if err := generate(t); err != nil {
+		t.Fatalf("incremental generate() after removing a non-empty source directory: error = %v, want nil", err)
+	}
+	assertDeployMissing(t, "sect")
+	assertDeployMissing(t, filepath.Join("sect", "index.html"))
+	assertDeployMissing(t, filepath.Join("sect", "more.html"))
+}
+
 func TestGenerateFailsOutsideRepository(t *testing.T) {
 	t.Chdir(t.TempDir())
 	err := generate(t)
