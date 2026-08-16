@@ -50,6 +50,34 @@ func TestWalkSkipsDeployDirectory(t *testing.T) {
 	}
 }
 
+func TestWalkSkipsConfiguredDeployPathOutsideZasDir(t *testing.T) {
+	gen := &Generator{Config: ConfigSection{ZAS: ConfigSection{"deploy": "public"}}}
+	info, err := os.Stat(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "public"
+	if err := gen.walk(path, info, nil); !errors.Is(err, filepath.SkipDir) {
+		t.Fatalf("walk(%q) error = %v, want %v", path, err, filepath.SkipDir)
+	}
+}
+
+func TestWalkSkipsConfiguredLayoutPathOutsideZasDir(t *testing.T) {
+	gen := &Generator{Config: ConfigSection{ZAS: ConfigSection{"layout": "mylayout.html"}}}
+	file := filepath.Join(t.TempDir(), "x")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "mylayout.html"
+	if err := gen.walk(path, info, nil); err != nil {
+		t.Fatalf("walk(%q) error = %v, want nil", path, err)
+	}
+}
+
 func TestWalkSkipsHiddenFileWithoutSkipDir(t *testing.T) {
 	gen := &Generator{}
 	file := filepath.Join(t.TempDir(), "x")
