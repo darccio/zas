@@ -110,3 +110,81 @@ func TestGenerateI18nChangeInvalidatesEveryPage(t *testing.T) {
 		t.Fatalf("sub/page.html = %q, want it regenerated with the (unchanged) Hola translation", out)
 	}
 }
+
+// TestGenerateZasYMLScopesInvalidationToItsSubtree is the trickiest case:
+// editing a .zas.yml must regenerate pages under its own directory without
+// touching pages elsewhere in the site, including an unrelated sibling
+// subdirectory that has no .zas.yml of its own.
+func TestGenerateZasYMLScopesInvalidationToItsSubtree(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.MkdirAll("other", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("other", "index.md"), []byte("# Other\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ageSources(t, -time.Hour)
+	if err := generate(t); err != nil {
+		t.Fatalf("first generate() error = %v, want nil", err)
+	}
+	if out := readDeploy(t, filepath.Join("sub", "page.html")); !strings.Contains(out, "Hola") {
+		t.Fatalf("sub/page.html = %q, want it to contain the original Hola translation", out)
+	}
+
+	subTarget := filepath.Join(".zas", "deploy", "sub", "page.html")
+	otherTarget := filepath.Join(".zas", "deploy", "other", "index.html")
+	aboutTarget := filepath.Join(".zas", "deploy", "about.html")
+
+	subBefore, err := os.Stat(subTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherBefore, err := os.Stat(otherTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aboutBefore, err := os.Stat(aboutTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	zasYML := filepath.Join("sub", ZAS_DIR_CONF_FILE)
+	if err := os.WriteFile(zasYML, []byte("language: en\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	touchFuture(t, zasYML)
+
+	if err := generate(t); err != nil {
+		t.Fatalf("second generate() error = %v, want nil", err)
+	}
+
+	// Direction 1: sub/page.html is under the changed .zas.yml's
+	// directory, so it must regenerate and reflect the new language.
+	subAfter, err := os.Stat(subTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subBefore.ModTime().Equal(subAfter.ModTime()) {
+		t.Fatalf("sub/page.html mtime unchanged after editing sub/.zas.yml, want it regenerated: mtime=%v", subBefore.ModTime())
+	}
+	if out := readDeploy(t, filepath.Join("sub", "page.html")); !strings.Contains(out, "Hello") || strings.Contains(out, "Hola") {
+		t.Fatalf("sub/page.html = %q, want it to reflect the new .zas.yml language (Hello, not Hola)", out)
+	}
+
+	// Direction 2: other/index.html and about.html are outside sub/, so
+	// editing sub/.zas.yml must not touch them.
+	otherAfter, err := os.Stat(otherTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !otherBefore.ModTime().Equal(otherAfter.ModTime()) {
+		t.Fatalf("other/index.html mtime changed after editing sub/.zas.yml, want unaffected sibling directory: before=%v after=%v", otherBefore.ModTime(), otherAfter.ModTime())
+	}
+	aboutAfter, err := os.Stat(aboutTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !aboutBefore.ModTime().Equal(aboutAfter.ModTime()) {
+		t.Fatalf("about.html mtime changed after editing sub/.zas.yml, want unaffected: before=%v after=%v", aboutBefore.ModTime(), aboutAfter.ModTime())
+	}
+}

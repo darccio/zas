@@ -38,7 +38,7 @@ func TestLoadZasDirectoryConfigConcurrent(t *testing.T) {
 			wg.Add(1)
 			go func(path, wantLang string) {
 				defer wg.Done()
-				cfg, err := gen.loadZasDirectoryConfig(path)
+				cfg, _, err := gen.loadZasDirectoryConfig(path)
 				if err != nil {
 					errCh <- fmt.Errorf("%s: %w", path, err)
 					return
