@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -120,6 +121,35 @@ func TestWalkDoesNotSkipDirEndingInZasDir(t *testing.T) {
 	}
 	if err := gen.walk("docs.zas", info, nil); err != nil {
 		t.Fatalf(`walk("docs.zas") error = %v, want nil`, err)
+	}
+}
+
+// TestWalkRecordsCollisionAndSkipsSecondGoroutine is a regression test: a
+// source file whose deploy output path was already claimed by another
+// source (e.g. foo.html claiming foo.html before foo.md tries to, since
+// swapExtension maps both to the same output) must not get a second
+// renderAsync goroutine spawned for it - that's what let two goroutines
+// race to write the same output file. It must instead record an error
+// naming both files and return without touching gen.wg.
+func TestWalkRecordsCollisionAndSkipsSecondGoroutine(t *testing.T) {
+	t.Chdir(t.TempDir())
+	gen := &Generator{claimedOutputs: map[string]string{"foo.html": "foo.html"}}
+	if err := os.WriteFile("foo.md", nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat("foo.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gen.walk("foo.md", info, nil); err != nil {
+		t.Fatalf("walk(%q) error = %v, want nil", "foo.md", err)
+	}
+	gen.wg.Wait()
+	if len(gen.errs) != 1 {
+		t.Fatalf("errs = %v, want exactly 1 collision error", gen.errs)
+	}
+	if msg := gen.errs[0].Error(); !strings.Contains(msg, "foo.md") || !strings.Contains(msg, "foo.html") {
+		t.Fatalf("errs[0] = %q, want it to mention both foo.md and foo.html", msg)
 	}
 }
 

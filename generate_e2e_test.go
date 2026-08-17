@@ -214,6 +214,67 @@ func TestGenerateSkipsNestedHiddenDirectory(t *testing.T) {
 	assertDeployMissing(t, ".zas")
 }
 
+// TestGenerateCollidingMDAndHTMLFailsDeterministically is a regression
+// test: a source .md and .html file in the same directory used to both
+// render to the identical deploy output path in concurrent goroutines,
+// picking a nondeterministic winner (or worse, an interleaved/corrupted
+// write) with no error at all. It must now fail the build and always
+// keep the same winner - the first file filepath.Walk visits, since only
+// that one ever gets a renderAsync goroutine spawned for it. This runs
+// several fresh builds to confirm the outcome is deterministic, not just
+// usually right; go test -race confirms there's no write race on the
+// shared output file either.
+func TestGenerateCollidingMDAndHTMLFailsDeterministically(t *testing.T) {
+	for range 5 {
+		t.Run("run", func(t *testing.T) {
+			newTestSite(t, "site")
+			if err := os.WriteFile("collide.md", []byte("# Marker A\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile("collide.html", []byte("<h1>Marker B</h1>\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			err := generate(t, fullGen)
+			if err == nil {
+				t.Fatal("generate() error = nil, want a collision error")
+			}
+			msg := err.Error()
+			for _, want := range []string{"collide.md", "collide.html"} {
+				if !strings.Contains(msg, want) {
+					t.Fatalf("generate() error = %q, want it to mention %q", msg, want)
+				}
+			}
+
+			out := readDeploy(t, "collide.html")
+			if !strings.Contains(out, "Marker B") || strings.Contains(out, "Marker A") {
+				t.Fatalf("collide.html = %q, want only the .html source's content", out)
+			}
+		})
+	}
+}
+
+// TestGenerateSurvivesCollisionElsewhereInSite confirms a collision
+// between two files doesn't block the rest of the site: every other page
+// must still render even though the build's overall error return still
+// signals the collision.
+func TestGenerateSurvivesCollisionElsewhereInSite(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.WriteFile("collide.md", []byte("# Marker A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("collide.html", []byte("<h1>Marker B</h1>\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := generate(t, fullGen); err == nil {
+		t.Fatal("generate() error = nil, want a collision error")
+	}
+	assertDeployHas(t, "index.html")
+	assertDeployHas(t, "about.html")
+	assertDeployHas(t, filepath.Join("sub", "page.html"))
+	assertDeployHas(t, "collide.html")
+}
+
 func TestGenerateFailsOutsideRepository(t *testing.T) {
 	t.Chdir(t.TempDir())
 	err := generate(t)
