@@ -263,10 +263,11 @@ func (gen *Generator) Run() error {
 	walk := func(path string, info os.FileInfo, err error) error {
 		return gen.walk(path, info, err)
 	}
-	if err := filepath.Walk(".", walk); err != nil {
-		return err
-	}
+	walkErr := filepath.Walk(".", walk)
 	gen.wg.Wait()
+	if walkErr != nil {
+		gen.recordErr(walkErr)
+	}
 	if !gen.Full {
 		// TODO Can we go parallel?
 		// This removes deleted source files in deploy path
