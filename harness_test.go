@@ -119,3 +119,15 @@ func ageSources(t *testing.T, d time.Duration) {
 		t.Fatal(err)
 	}
 }
+
+// touchFuture sets path's mtime an hour ahead of time.Now(), so a
+// dependency file rewritten after the first generate is unambiguously
+// newer than the deploy output that first generate just wrote, regardless
+// of filesystem mtime resolution.
+func touchFuture(t *testing.T, path string) {
+	t.Helper()
+	when := time.Now().Add(time.Hour)
+	if err := os.Chtimes(path, when, when); err != nil {
+		t.Fatal(err)
+	}
+}
