@@ -104,3 +104,42 @@ func TestWalkDoesNotSkipDirAtRoot(t *testing.T) {
 		t.Fatalf(`walk(".") error = %v, want nil`, err)
 	}
 }
+
+// TestWalkDoesNotSkipDirEndingInZasDir is a regression test: a directory
+// whose name merely ends in ZAS_DIR (".zas"), such as "docs.zas", must not
+// be treated as the real ".zas" directory.
+func TestWalkDoesNotSkipDirEndingInZasDir(t *testing.T) {
+	t.Chdir(t.TempDir())
+	gen := &Generator{}
+	if err := os.Mkdir("docs.zas", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat("docs.zas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gen.walk("docs.zas", info, nil); err != nil {
+		t.Fatalf(`walk("docs.zas") error = %v, want nil`, err)
+	}
+}
+
+func TestPathHasComponent(t *testing.T) {
+	tests := []struct {
+		path      string
+		component string
+		want      bool
+	}{
+		{ZAS_DIR, ZAS_DIR, true},
+		{filepath.Join("sect", ZAS_DIR), ZAS_DIR, true},
+		{filepath.Join(ZAS_DIR, "config.yml"), ZAS_DIR, true},
+		{"docs.zas", ZAS_DIR, false},
+		{filepath.Join("docs.zas", "page.md"), ZAS_DIR, false},
+		{"myzasdir", ZAS_DIR, false},
+		{"foo.zaster", ZAS_DIR, false},
+	}
+	for _, tt := range tests {
+		if got := pathHasComponent(tt.path, tt.component); got != tt.want {
+			t.Errorf("pathHasComponent(%q, %q) = %v, want %v", tt.path, tt.component, got, tt.want)
+		}
+	}
+}
