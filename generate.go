@@ -125,6 +125,14 @@ type Generator struct {
 	// reapedDirs holds deploy paths reaper has RemoveAll'd during the
 	// current reap walk. The reap walk is single-threaded, so no mutex.
 	reapedDirs map[string]struct{}
+
+	// claimedOutputs maps each deploy output path claimed so far to the
+	// source path that claimed it, so two sources that render to the same
+	// output (e.g. foo.md and foo.html) don't both spawn a renderAsync
+	// goroutine and race to write it. Like reapedDirs, this is only
+	// touched from walk, whose own invocations are sequential, so no
+	// mutex is needed.
+	claimedOutputs map[string]string
 }
 
 /*
@@ -328,6 +336,15 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	if info.IsDir() {
 		ierr = os.MkdirAll(gen.BuildDeployPath(path), os.FileMode(ZAS_DEFAULT_DIR_PERM))
 	} else if gen.sourceIsNewer(path, info) {
+		outputPath := swapExtension(path, ".md", ".html")
+		if claimant, ok := gen.claimedOutputs[outputPath]; ok {
+			gen.recordErr(fmt.Errorf("%s: output path %q already claimed by %s, skipping", path, outputPath, claimant))
+			return
+		}
+		if gen.claimedOutputs == nil {
+			gen.claimedOutputs = make(map[string]string)
+		}
+		gen.claimedOutputs[outputPath] = path
 		if gen.Verbose {
 			fmt.Println("+", path)
 		}
