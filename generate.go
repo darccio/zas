@@ -32,6 +32,7 @@ import (
 	"strings"
 	"sync"
 	ttext "text/template"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/melvinmt/gt"
@@ -111,8 +112,18 @@ type Generator struct {
 	Layout *thtml.Template
 	// i18n helper.
 	I18n *gt.Build
+	// layoutModTime, configModTime, and i18nModTime are the shared
+	// dependency files' mtimes, each captured once during Run's startup
+	// phase (parseLayout, Run, loadI18N) instead of being stat'd per page,
+	// since a site can have thousands of pages all depending on the same
+	// three files. sourceIsNewer treats a page as stale if any is newer
+	// than the page's deploy output. Zero value (e.g. i18n.yml absent)
+	// never counts as newer than a real deploy output.
+	layoutModTime time.Time
+	configModTime time.Time
+	i18nModTime   time.Time
 	// ZasDirectoryConfigs cache
-	cachedZasDirectoryConfigs map[string]ConfigSection
+	cachedZasDirectoryConfigs map[string]dirConfigEntry
 	// Guards cachedZasDirectoryConfigs, read and written from many renderAsync goroutines.
 	dirConfigMu sync.Mutex
 
@@ -237,6 +248,9 @@ func (gen *Generator) Run() error {
 		return err
 	}
 	gen.Config = cfg
+	if info, statErr := os.Stat(ZAS_CONF_FILE); statErr == nil {
+		gen.configModTime = info.ModTime()
+	}
 	gen.wg.Add(3)
 	go gen.parseLayout()
 	go gen.loadI18N()
@@ -274,6 +288,9 @@ func (gen *Generator) parseLayout() {
 	defer gen.wg.Done()
 
 	layout := gen.Config.GetZString("layout")
+	if info, statErr := os.Stat(layout); statErr == nil {
+		gen.layoutModTime = info.ModTime()
+	}
 	if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
 		gen.recordErr(err)
 	}
@@ -291,6 +308,9 @@ func (gen *Generator) loadI18N() {
 	gen.I18n = &gt.Build{
 		Index:  i18nStrings,
 		Origin: mainlang,
+	}
+	if info, statErr := os.Stat(ZAS_I18N_FILE); statErr == nil {
+		gen.i18nModTime = info.ModTime()
 	}
 }
 
@@ -436,7 +456,20 @@ func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
 	if err != nil {
 		return true
 	}
-	return sourceInfo.ModTime().UnixNano() >= destinationInfo.ModTime().UnixNano()
+	destModTime := destinationInfo.ModTime()
+	if sourceInfo.ModTime().UnixNano() >= destModTime.UnixNano() {
+		return true
+	}
+	// .Before, not UnixNano: a dependency that was never stat'd (e.g. no
+	// i18n.yml, or no .zas.yml anywhere in path's ancestry) leaves its
+	// mtime at time.Time's zero value, and zero.UnixNano() is documented
+	// as undefined for dates this far out - .Before/.After stay well
+	// defined and correctly treat "never stat'd" as "not newer".
+	if !gen.layoutModTime.Before(destModTime) || !gen.configModTime.Before(destModTime) || !gen.i18nModTime.Before(destModTime) {
+		return true
+	}
+	_, dirModTime, _ := gen.loadZasDirectoryConfig(path)
+	return !dirModTime.Before(destModTime)
 }
 
 /*
@@ -471,52 +504,75 @@ func (gen *Generator) renderHTML(path string) (err error) {
 	return gen.render(path, input)
 }
 
+// dirConfigEntry is a cached loadZasDirectoryConfig resolution: config is
+// nil when no ZAS_DIR_CONF_FILE exists anywhere in the queried directory's
+// ancestry, and modTime is its zero value in that case too.
+type dirConfigEntry struct {
+	config  ConfigSection
+	modTime time.Time
+}
+
 /*
  * Loads ZAS_DIR_CONF_FILE (as defined in constants.go) from current
- * directory or previously found ones.
+ * directory or previously found ones, along with that file's own mtime.
  * It must be a YAML file.
+ *
+ * Every directory visited while resolving currentpath is cached, not just
+ * the one where ZAS_DIR_CONF_FILE was actually found - including a miss
+ * that bottoms out at ".". Without that, a directory with no directory
+ * config anywhere in its ancestry (the common case) would redo the whole
+ * upward walk on every call instead of hitting the cache after the first.
  */
-func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigSection, err error) {
+func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigSection, modTime time.Time, err error) {
 	path := filepath.Dir(currentpath)
-	if config, ok := gen.getCachedDirConfig(path); ok {
-		return config, nil
+	if entry, ok := gen.getCachedDirConfig(path); ok {
+		if entry.config == nil {
+			return nil, time.Time{}, os.ErrNotExist
+		}
+		return entry.config, entry.modTime, nil
 	}
-	data, err := os.ReadFile(fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE))
+	confPath := fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE)
+	data, err := os.ReadFile(confPath)
 	if err != nil {
 		// Maybe .zas.yml is in an upper directory (already cached or not),
-		// so we call this recursively.
-		// Unless we are at current working directory.
-		if path == "." {
-			return nil, err
+		// so we call this recursively. Unless we are at current working
+		// directory.
+		var entry dirConfigEntry
+		if path != "." {
+			entry.config, entry.modTime, err = gen.loadZasDirectoryConfig(path)
 		}
-		return gen.loadZasDirectoryConfig(path)
+		gen.setCachedDirConfig(path, entry)
+		return entry.config, entry.modTime, err
 	}
 	config = make(ConfigSection)
 	_ = yaml.Unmarshal(data, &config)
-	gen.setCachedDirConfig(path, config)
-	return config, nil
+	if info, statErr := os.Stat(confPath); statErr == nil {
+		modTime = info.ModTime()
+	}
+	gen.setCachedDirConfig(path, dirConfigEntry{config: config, modTime: modTime})
+	return config, modTime, nil
 }
 
 /*
  * Reads cachedZasDirectoryConfigs, safe for concurrent use.
  */
-func (gen *Generator) getCachedDirConfig(path string) (config ConfigSection, ok bool) {
+func (gen *Generator) getCachedDirConfig(path string) (entry dirConfigEntry, ok bool) {
 	gen.dirConfigMu.Lock()
 	defer gen.dirConfigMu.Unlock()
-	config, ok = gen.cachedZasDirectoryConfigs[path]
+	entry, ok = gen.cachedZasDirectoryConfigs[path]
 	return
 }
 
 /*
  * Writes cachedZasDirectoryConfigs, safe for concurrent use.
  */
-func (gen *Generator) setCachedDirConfig(path string, config ConfigSection) {
+func (gen *Generator) setCachedDirConfig(path string, entry dirConfigEntry) {
 	gen.dirConfigMu.Lock()
 	defer gen.dirConfigMu.Unlock()
 	if gen.cachedZasDirectoryConfigs == nil {
-		gen.cachedZasDirectoryConfigs = make(map[string]ConfigSection)
+		gen.cachedZasDirectoryConfigs = make(map[string]dirConfigEntry)
 	}
-	gen.cachedZasDirectoryConfigs[path] = config
+	gen.cachedZasDirectoryConfigs[path] = entry
 }
 
 /*
@@ -531,7 +587,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	var processed bytes.Buffer
 	// Building context and rendering template.
 	data := NewZasData(path, gen)
-	data.Directory, _ = gen.loadZasDirectoryConfig(path)
+	data.Directory, _, _ = gen.loadZasDirectoryConfig(path)
 	// Pass a pointer: text/template only sees pointer-receiver methods
 	// (Title, E, URL, ...) on an addressable value, and a plain "data" here
 	// is not addressable.
