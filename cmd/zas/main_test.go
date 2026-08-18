@@ -33,6 +33,31 @@ func writeStubPlugin(t *testing.T, dir, name, script string) {
 	}
 }
 
+// captureOutput redirects *target (os.Stdout or os.Stderr) to a pipe for
+// the duration of fn, and returns everything written to it.
+func captureOutput(t *testing.T, target **os.File, fn func()) string {
+	t.Helper()
+
+	orig := *target
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	*target = w
+
+	fn()
+
+	*target = orig
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
 // TestRunUnknownCommandDoesNotPanic covers the everyday typo case: no
 // zs<name> binary exists on PATH at all. run must report a clean message
 // and a defined exit code instead of the panic/stack trace this is a
@@ -110,5 +135,93 @@ func TestRunUnknownFlagOnInternalSubcommand(t *testing.T) {
 
 	if code := run([]string{"generate", "--no-such-flag"}); code != 2 {
 		t.Errorf("run() = %d, want 2", code)
+	}
+}
+
+// TestRunHelpListsSubcommands covers "zas help": it must succeed and list
+// every internal subcommand's one-line usage, instead of falling through to
+// runPlugin looking for a nonexistent "zshelp" binary.
+func TestRunHelpListsSubcommands(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	var code int
+	out := captureOutput(t, &os.Stdout, func() {
+		code = run([]string{"help"})
+	})
+
+	if code != 0 {
+		t.Errorf("run() = %d, want 0", code)
+	}
+	for _, name := range []string{"init", "generate", "help", "version"} {
+		if !strings.Contains(out, name) {
+			t.Errorf("stdout = %q, want it to mention subcommand %q", out, name)
+		}
+	}
+}
+
+// TestRunTopLevelHelpFlag covers "zas -h" and "zas --help" used bare (no
+// other subcommand): both must now show the same general help as "zas
+// help", not the old behavior of being rewritten to "generate -h".
+func TestRunTopLevelHelpFlag(t *testing.T) {
+	for _, arg := range []string{"-h", "-help", "--help"} {
+		t.Run(arg, func(t *testing.T) {
+			t.Setenv("PATH", t.TempDir())
+
+			var code int
+			out := captureOutput(t, &os.Stdout, func() {
+				code = run([]string{arg})
+			})
+
+			if code != 0 {
+				t.Errorf("run() = %d, want 0", code)
+			}
+			// The general help lists every subcommand's usage line,
+			// including "version" - generate's own -h usage would not.
+			if !strings.Contains(out, "version") {
+				t.Errorf("stdout = %q, want general help mentioning the version subcommand", out)
+			}
+		})
+	}
+}
+
+// TestRunGenerateHelpStillShowsGenerateUsage is the regression guard for the
+// routing change above: "zas generate -h" (subcommand named explicitly)
+// must keep showing generate's own flag usage, not the general help.
+func TestRunGenerateHelpStillShowsGenerateUsage(t *testing.T) {
+	var code int
+	// flag.FlagSet's default usage output goes to its Output(), which
+	// defaults to os.Stderr.
+	out := captureOutput(t, &os.Stderr, func() {
+		code = run([]string{"generate", "-h"})
+	})
+
+	if code != 0 {
+		t.Errorf("run() = %d, want 0", code)
+	}
+	if !strings.Contains(out, "Usage of generate:") {
+		t.Errorf("stderr = %q, want it to report \"Usage of generate:\" (not \"Usage of :\")", out)
+	}
+	if !strings.Contains(out, "-verbose") || !strings.Contains(out, "-full") {
+		t.Errorf("stderr = %q, want it to list generate's -verbose and -full flags", out)
+	}
+}
+
+// TestRunVersion covers "zas version" and the top-level "-version"/
+// "--version" flags: all three must print version information and exit 0.
+func TestRunVersion(t *testing.T) {
+	for _, args := range [][]string{{"version"}, {"-version"}, {"--version"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var code int
+			out := captureOutput(t, &os.Stdout, func() {
+				code = run(args)
+			})
+
+			if code != 0 {
+				t.Errorf("run() = %d, want 0", code)
+			}
+			if !strings.Contains(out, "zas version") {
+				t.Errorf("stdout = %q, want it to report a zas version", out)
+			}
+		})
 	}
 }
