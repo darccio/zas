@@ -80,20 +80,7 @@ func buildWalkErrorFixture(t *testing.T, dir string) (badDir string) {
 			t.Fatal(err)
 		}
 	}
-	must(os.MkdirAll(filepath.Join(dir, ZAS_DIR), 0o755))
-	must(os.WriteFile(filepath.Join(dir, ZAS_CONF_FILE), []byte(`zas:
-  layout: `+ZAS_DIR+`/layout.html
-  deploy: `+ZAS_DIR+`/deploy
-site:
-  baseurl: http://example.com
-  language: en
-mimetypes:
-  text/markdown: markdown
-  text/plain: plain
-  text/html: html
-`), 0o644))
-	must(os.WriteFile(filepath.Join(dir, ZAS_DIR, "layout.html"), []byte(
-		`<html><head><title>{{.Title}}</title></head><body>{{.Body}}</body></html>`), 0o644))
+	copyFixture(t, "walk-error-base", dir)
 
 	writePages := func(sub string, n int) {
 		must(os.MkdirAll(sub, 0o755))

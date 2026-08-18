@@ -13,7 +13,7 @@ import (
 // https://github.com/darccio/zas/issues/16.
 
 func TestGenerateFullSite(t *testing.T) {
-	t.Chdir(t.TempDir())
+	newTestSite(t, "i18n-site")
 
 	must := func(err error) {
 		t.Helper()
@@ -21,25 +21,6 @@ func TestGenerateFullSite(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(os.MkdirAll(ZAS_DIR, 0o755))
-	must(os.WriteFile(ZAS_CONF_FILE, []byte(`zas:
-  layout: `+ZAS_DIR+`/layout.html
-  deploy: `+ZAS_DIR+`/deploy
-site:
-  baseurl: http://example.com
-  language: en
-mimetypes:
-  text/markdown: markdown
-  text/plain: plain
-  text/html: html
-`), 0o644))
-	must(os.WriteFile(filepath.Join(ZAS_DIR, "layout.html"), []byte(
-		`<html><head><title>{{.Title}}</title></head>`+
-			`<body><h2 id="i18n">{{.E "greeting" "World"}}</h2>`+
-			`<main class="inside">{{.Body}}</main></body></html>`), 0o644))
-	must(os.WriteFile(ZAS_I18N_FILE, []byte("greeting:\n  en: \"Hello %s\"\n"), 0o644))
-	must(os.WriteFile("index.md", []byte("<div>\nHello world!\n</div>\n"), 0o644))
-	must(os.WriteFile("about.md", []byte("<!-- title: Overridden -->\n\n# Ignored\n\nBody text.\n"), 0o644))
 
 	gen := &Generator{Full: true}
 	if err := gen.Run(); err != nil {

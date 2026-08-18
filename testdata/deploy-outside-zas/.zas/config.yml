@@ -1,0 +1,10 @@
+zas:
+  layout: .zas/layout.html
+  deploy: public
+site:
+  baseurl: http://example.com
+  language: en
+mimetypes:
+  text/markdown: markdown
+  text/plain: plain
+  text/html: html

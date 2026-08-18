@@ -18,17 +18,23 @@ import (
 // mergo aliasing in NewConfig can't leak mutations into later tests.
 func newTestSite(t *testing.T, fixture string) string {
 	t.Helper()
+	dir := t.TempDir()
+	copyFixture(t, fixture, dir)
+	t.Chdir(dir)
+	saveGlobals(t)
+	return dir
+}
+
+// copyFixture copies testdata/<fixture> into dir, which must already exist.
+func copyFixture(t *testing.T, fixture, dir string) {
+	t.Helper()
 	src, err := filepath.Abs(filepath.Join("testdata", fixture))
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
 	if err := os.CopyFS(dir, os.DirFS(src)); err != nil {
 		t.Fatal(err)
 	}
-	t.Chdir(dir)
-	saveGlobals(t)
-	return dir
 }
 
 // saveGlobals deep-copies ZAS_DEFAULT_CONF and restores it after the test,
