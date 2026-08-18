@@ -29,8 +29,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	ttext "text/template"
 	"time"
 
@@ -129,9 +131,28 @@ type Generator struct {
 
 	wg sync.WaitGroup
 
+	// sem bounds how many renderAsync goroutines may run at once (see
+	// renderConcurrency), so a large site doesn't fan out one goroutine
+	// per source file with no ceiling. Lazily sized on first use in walk,
+	// whose own invocations are sequential like claimedOutputs and
+	// reapedDirs below, so no mutex guards the initialization itself.
+	sem chan struct{}
+
+	// active and peakActive track how many renderAsync goroutines are
+	// concurrently doing real rendering work. Nothing in production code
+	// reads peakActive; it exists purely so tests can assert the bound
+	// enforced by sem is actually respected.
+	active     atomic.Int64
+	peakActive atomic.Int64
+
 	// Guards errs, which collects per-file render errors from renderAsync goroutines.
 	mu   sync.Mutex
 	errs []error
+
+	// printMu serializes stdout writes from renderAsync goroutines (the
+	// verbose "+" line in walk and the error lines in render) so
+	// concurrent goroutines can't interleave mid-line.
+	printMu sync.Mutex
 
 	// reapedDirs holds deploy paths reaper has RemoveAll'd during the
 	// current reap walk. The reap walk is single-threaded, so no mutex.
@@ -144,6 +165,26 @@ type Generator struct {
 	// touched from walk, whose own invocations are sequential, so no
 	// mutex is needed.
 	claimedOutputs map[string]string
+}
+
+// renderConcurrency bounds how many renderAsync goroutines may run at
+// once. Each one interleaves CPU-bound work (HTML5 parse, template
+// execution) with blocking file I/O (reading the source, then an atomic
+// write via temp-file-then-rename), so sizing purely on GOMAXPROCS would
+// leave CPUs idle while goroutines wait on I/O; the x4 multiplier keeps
+// them busy without still spawning thousands of concurrent goroutines
+// (and open file descriptors) for a large site.
+func renderConcurrency() int {
+	return runtime.GOMAXPROCS(0) * 4
+}
+
+// printLine writes args to stdout like fmt.Println, but serialized
+// against every other printLine call so concurrent renderAsync
+// goroutines (and walk itself) never interleave mid-line.
+func (gen *Generator) printLine(args ...interface{}) {
+	gen.printMu.Lock()
+	defer gen.printMu.Unlock()
+	fmt.Println(args...)
 }
 
 /*
@@ -391,9 +432,16 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 		}
 		gen.claimedOutputs[outputPath] = path
 		if gen.Verbose {
-			fmt.Println("+", path)
+			gen.printLine("+", path)
+		}
+		if gen.sem == nil {
+			gen.sem = make(chan struct{}, renderConcurrency())
 		}
 		gen.wg.Add(1)
+		// Blocks once renderConcurrency() goroutines are already in
+		// flight, throttling walk itself until one finishes and releases
+		// its slot - the actual fan-out cap.
+		gen.sem <- struct{}{}
 		go gen.renderAsync(path)
 	}
 	return
@@ -402,6 +450,16 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 func (gen *Generator) renderAsync(path string) {
 	var err error
 	defer gen.wg.Done()
+	defer func() { <-gen.sem }()
+
+	n := gen.active.Add(1)
+	defer gen.active.Add(-1)
+	for {
+		peak := gen.peakActive.Load()
+		if n <= peak || gen.peakActive.CompareAndSwap(peak, n) {
+			break
+		}
+	}
 
 	switch {
 	case strings.HasSuffix(path, ".md"):
@@ -621,13 +679,13 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	}
 	doc, err := gen.parseAndReplace(processed, &data)
 	if err != nil {
-		fmt.Println(err)
+		gen.printLine(err)
 		return
 	}
 	gen.cleanUnnecessaryPTags(doc)
 	data.Page, err = gen.extractPageConfig(doc)
 	if err != nil {
-		fmt.Println(path, "=>", err)
+		gen.printLine(path, "=>", err)
 		err = nil
 	}
 	data.FirstTitle = gen.getTitle(doc)
