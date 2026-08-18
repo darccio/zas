@@ -40,6 +40,29 @@ func TestGenerateSurvivesStrayLeftoverTempFile(t *testing.T) {
 	}
 }
 
+// TestGenerateOutputHasDefaultPermissions is a plain regression check that
+// atomicWriteFile's explicit Chmod didn't change anything observable about
+// the normal, uninterrupted path: a rendered page (through Generate) and a
+// copied asset (through copy) must both still end up at the deploy tree's
+// usual 0644, matching ZAS_DEFAULT_FILE_PERM, exactly as the old direct
+// os.OpenFile(..., ZAS_DEFAULT_FILE_PERM) calls produced.
+func TestGenerateOutputHasDefaultPermissions(t *testing.T) {
+	newTestSite(t, "site")
+	if err := generate(t); err != nil {
+		t.Fatalf("generate() error = %v, want nil", err)
+	}
+
+	for _, rel := range []string{"about.html", filepath.Join("assets", "data.json")} {
+		info, err := os.Stat(filepath.Join(".zas", "deploy", rel))
+		if err != nil {
+			t.Fatalf("stat(%q): %v", rel, err)
+		}
+		if perm := info.Mode().Perm(); perm != os.FileMode(ZAS_DEFAULT_FILE_PERM) {
+			t.Errorf("%s permissions = %o, want %o", rel, perm, ZAS_DEFAULT_FILE_PERM)
+		}
+	}
+}
+
 const (
 	killFixtureNPages    = 3000
 	killFixtureNAssets   = 25
