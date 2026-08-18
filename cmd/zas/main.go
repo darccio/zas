@@ -24,7 +24,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
 	"runtime/debug"
 	"strings"
 
@@ -80,7 +79,6 @@ func init() {
 }
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
 	os.Exit(run(os.Args[1:]))
 }
 
