@@ -59,8 +59,10 @@ func init() {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	os.Exit(run(os.Args[1:]))
+}
 
-	args := os.Args[1:]
+func run(args []string) int {
 	if len(args) == 0 {
 		// If no subcommand is provided, we default to "generate".
 		args = []string{"generate"}
@@ -77,28 +79,43 @@ func main() {
 		if cmd.Name == command && cmd.Run != nil {
 			if err := cmd.Flag.Parse(args[1:]); err != nil {
 				if errors.Is(err, flag.ErrHelp) {
-					os.Exit(0)
+					return 0
 				}
-				os.Exit(2)
+				return 2
 			}
 
 			if err := cmd.Run(); err != nil {
 				fmt.Fprintf(os.Stderr, "fatal: %s\n", err)
-				os.Exit(1)
+				return 1
 			}
 
-			os.Exit(0)
+			return 0
 		}
 	}
 
-	// If not internal subcommand is found, we try to exec an external Zas subcommand (plugin).
+	// No internal subcommand matched; try to exec an external Zas subcommand (plugin).
+	return runPlugin(args)
+}
+
+func runPlugin(args []string) int {
 	cmd := exec.Command(fmt.Sprintf("%s%s", zas.ZAS_PREFIX, args[0]), args[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "# %s %s\n", args[0], strings.Join(args[1:], " "))
-
-		panic(err)
+	err := cmd.Run()
+	if err == nil {
+		return 0
 	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+
+	if errors.Is(err, exec.ErrNotFound) {
+		fmt.Fprintf(os.Stderr, "unknown command: %q\n", args[0])
+	} else {
+		fmt.Fprintf(os.Stderr, "fatal: %s\n", err)
+	}
+	return 127
 }
