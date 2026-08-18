@@ -176,6 +176,41 @@ func swapExtension(path, from, to string) string {
 	return strings.TrimSuffix(path, from) + to
 }
 
+// atomicWriteFile calls write with a temporary file in path's own directory
+// (same filesystem, so the rename below is atomic), then renames it onto
+// path once write fully succeeds. path itself is never opened or truncated,
+// so an interruption at any point - panic, crash, SIGKILL, power loss -
+// before the rename leaves it holding either its previous complete content
+// or nothing, never a partial write. On any error the temporary file is
+// removed instead of left behind.
+func (gen *Generator) atomicWriteFile(path string, write func(io.Writer) error) (err error) {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := f.Name()
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+	if err = write(f); err != nil {
+		_ = f.Close()
+		return err
+	}
+	// os.CreateTemp always creates with mode 0600, regardless of
+	// ZAS_DEFAULT_FILE_PERM, so the final file's permissions must be set
+	// explicitly before it replaces path.
+	if err = f.Chmod(os.FileMode(ZAS_DEFAULT_FILE_PERM)); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
 // Generate renders and writes the file at data.Path using the given
 // template context.
 func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
@@ -199,20 +234,9 @@ func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
 			}
 		}
 	}
-	f, err := os.OpenFile(gen.BuildDeployPath(data.Path), os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.FileMode(ZAS_DEFAULT_FILE_PERM))
-	if err != nil {
-		return
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-	err = html5.Render(f, doc.Get(0))
-	if err != nil {
-		return
-	}
-	return
+	return gen.atomicWriteFile(gen.BuildDeployPath(data.Path), func(w io.Writer) error {
+		return html5.Render(w, doc.Get(0))
+	})
 }
 
 // maxEmbedDepth bounds how many levels of <embed> an entry file may nest.
@@ -682,17 +706,10 @@ func (gen *Generator) copy(dstPath, srcPath string) (err error) {
 		return
 	}
 	defer func() { _ = src.Close() }()
-	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(ZAS_DEFAULT_FILE_PERM))
-	if err != nil {
-		return
-	}
-	defer func() {
-		if cerr := dst.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-	_, err = io.Copy(dst, src)
-	return
+	return gen.atomicWriteFile(dstPath, func(w io.Writer) error {
+		_, err := io.Copy(w, src)
+		return err
+	})
 }
 
 // Markdown embeds a Markdown file.
