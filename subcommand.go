@@ -43,9 +43,27 @@ type Subcommand struct {
 // NewSubcommand builds a Subcommand from a usage line and its run function.
 func NewSubcommand(usageLine string, run func() error) *Subcommand {
 	data := strings.SplitN(usageLine, " ", 2)
+	name := strings.ToLower(data[0])
+
+	// Named (rather than the zero value) so that Go's own flag-parsing
+	// error/usage output - e.g. from an unrecognized flag, or -h/-help on a
+	// subcommand with no Usage func set - reports "Usage of <name>:"
+	// instead of "Usage of :".
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	// flag.NewFlagSet points fs.Usage at fs.defaultUsage, a method value
+	// bound to the *flag.FlagSet it returns. Subcommand.Flag stores a
+	// flag.FlagSet by value, so fs gets copied below; a bound Usage would
+	// keep referring to this now-orphaned fs instead of the copy that
+	// callers actually register flags on and parse with, so it would
+	// print an empty flag list. Clearing it here restores the ordinary
+	// (nil-Usage) behavior, where usage() calls defaultUsage() on
+	// whichever FlagSet it's actually invoked on.
+	fs.Usage = nil
+
 	return &Subcommand{
 		UsageLine: usageLine,
-		Name:      strings.ToLower(data[0]),
+		Name:      name,
 		Run:       run,
+		Flag:      *fs,
 	}
 }
