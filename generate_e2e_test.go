@@ -292,30 +292,7 @@ func TestGenerateFailsOutsideRepository(t *testing.T) {
 // again and nested it one level deeper (public/public/..., compounding
 // every run).
 func TestGenerateDeployPathOutsideZasDirNotWalkedAsSource(t *testing.T) {
-	t.Chdir(t.TempDir())
-	saveGlobals(t)
-
-	must := func(err error) {
-		t.Helper()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	must(os.MkdirAll(ZAS_DIR, 0o755))
-	must(os.WriteFile(ZAS_CONF_FILE, []byte(`zas:
-  layout: `+ZAS_DIR+`/layout.html
-  deploy: public
-site:
-  baseurl: http://example.com
-  language: en
-mimetypes:
-  text/markdown: markdown
-  text/plain: plain
-  text/html: html
-`), 0o644))
-	must(os.WriteFile(filepath.Join(ZAS_DIR, "layout.html"), []byte(
-		`<html><head><title>{{.Title}}</title></head><body>{{.Body}}</body></html>`), 0o644))
-	must(os.WriteFile("index.md", []byte("# Hello\n"), 0o644))
+	newTestSite(t, "deploy-outside-zas")
 
 	for range 3 {
 		if err := generate(t); err != nil {
@@ -335,31 +312,7 @@ mimetypes:
 // test: a layout file outside .zas/ used to be walked like any other page
 // and published under its own name in the deploy tree.
 func TestGenerateLayoutPathOutsideZasDirNotPublishedAsPage(t *testing.T) {
-	t.Chdir(t.TempDir())
-	saveGlobals(t)
-
-	must := func(err error) {
-		t.Helper()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	must(os.MkdirAll(ZAS_DIR, 0o755))
-	must(os.WriteFile(ZAS_CONF_FILE, []byte(`zas:
-  layout: mylayout.html
-  deploy: `+ZAS_DIR+`/deploy
-site:
-  baseurl: http://example.com
-  language: en
-mimetypes:
-  text/markdown: markdown
-  text/plain: plain
-  text/html: html
-`), 0o644))
-	must(os.WriteFile("mylayout.html", []byte(
-		`<html><head><title>{{.Title}}</title></head><body>{{.Body}}</body></html>`), 0o644))
-	must(os.WriteFile("index.md", []byte("# Hello\n"), 0o644))
-	must(os.WriteFile("about.md", []byte("# About\n"), 0o644))
+	newTestSite(t, "layout-outside-zas")
 
 	if err := generate(t); err != nil {
 		t.Fatalf("generate() error = %v, want nil", err)
