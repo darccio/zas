@@ -73,9 +73,12 @@ func (zd *ZasData) Title() (title string) {
 	return
 }
 
-// URL builds the URL from current configuration.
+// URL builds the URL from current configuration. BaseURL is documented as
+// being configured without a trailing slash, but nothing enforces that; a
+// trailing slash is trimmed here so it doesn't double up with Path, which
+// always starts with its own leading slash.
 func (zd *ZasData) URL() string {
-	return fmt.Sprintf("%s%s", zd.Site.BaseURL, zd.Path)
+	return strings.TrimRight(zd.Site.BaseURL, "/") + zd.Path
 }
 
 // Extra is a helper template method to get any value from ZasData.config
