@@ -652,12 +652,22 @@ func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigS
 		return entry.config, entry.modTime, err
 	}
 	config = make(ConfigSection)
-	_ = yaml.Unmarshal(data, &config)
+	if yamlErr := yaml.Unmarshal(data, &config); yamlErr != nil {
+		// A malformed .zas.yml would otherwise look like a completely
+		// successful, merely empty, config load (err == nil here), and that
+		// empty config is about to be memoized for the rest of this run: no
+		// page under this directory would ever see a diagnostic for it.
+		// Route it through the same aggregation/reporting path every other
+		// config-loading failure (parseLayout, loadI18N, ...) already uses,
+		// so it surfaces once, without aborting the rest of the build.
+		err = fmt.Errorf("%s: %w", confPath, yamlErr)
+		gen.recordErr(err)
+	}
 	if info, statErr := os.Stat(confPath); statErr == nil {
 		modTime = info.ModTime()
 	}
 	gen.setCachedDirConfig(path, dirConfigEntry{config: config, modTime: modTime})
-	return config, modTime, nil
+	return config, modTime, err
 }
 
 /*
@@ -703,20 +713,19 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	}
 	doc, err := gen.parseAndReplace(processed, &data)
 	if err != nil {
-		gen.printLine(err)
 		return
 	}
 	gen.cleanUnnecessaryPTags(doc)
-	data.Page, err = gen.extractPageConfig(doc)
-	if err != nil {
-		gen.printLine(path, "=>", err)
-		err = nil
+	var pageErr error
+	data.Page, pageErr = gen.extractPageConfig(doc)
+	if pageErr != nil {
+		// A malformed page-config comment is reported but doesn't abort the
+		// render: it's kept out of the named err return (unlike every other
+		// error in this function) so the rest of the page still renders.
+		gen.printLine(path, "=>", pageErr)
 	}
 	data.FirstTitle = gen.getTitle(doc)
 	body := doc.Find(atom.Body.String())
-	if err != nil {
-		return
-	}
 	if body.Size() > 0 {
 		bodyHTML, bodyErr := body.Html()
 		if bodyErr != nil {
@@ -822,7 +831,7 @@ func (gen *Generator) extractPageConfig(doc *goquery.Document) (config map[inter
 		}
 	}
 	if comment != nil {
-		_ = yaml.Unmarshal([]byte(comment.Data), &config)
+		err = yaml.Unmarshal([]byte(comment.Data), &config)
 	}
 	return
 }
