@@ -737,15 +737,26 @@ func (gen *Generator) getTitle(doc *goquery.Document) (title string) {
 
 /*
  * Extracts first HTML commend as map. It expects it as a valid YAML map.
+ *
+ * The config comment is looked for among the document's top-level nodes
+ * (Doctype, comments, the <html> element, ...), not just the literal first
+ * one: a leading "<!DOCTYPE html>" - or anything else parsed as a sibling
+ * ahead of the comment - would otherwise push the comment out of the
+ * FirstChild slot and make its config silently disappear. This still stops
+ * at the first CommentNode it finds walking top-level siblings in document
+ * order, so the established "config comment as the very first line" layout
+ * keeps working exactly as before.
  */
 func (gen *Generator) extractPageConfig(doc *goquery.Document) (config map[interface{}]interface{}, err error) {
 	var comment *html5.Node
-	for _, child := range doc.Nodes {
-		if child.FirstChild == nil {
-			continue
+	for _, root := range doc.Nodes {
+		for child := root.FirstChild; child != nil; child = child.NextSibling {
+			if child.Type == html5.CommentNode {
+				comment = child
+				break
+			}
 		}
-		if child.FirstChild.Type == html5.CommentNode {
-			comment = child.FirstChild
+		if comment != nil {
 			break
 		}
 	}
