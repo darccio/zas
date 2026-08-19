@@ -770,10 +770,40 @@ func (gen *Generator) copy(dstPath, srcPath string) (err error) {
 	})
 }
 
+// resolveEmbedSrc resolves an <embed src="..."> attribute to an absolute
+// path and rejects any result that falls outside the site root - the
+// process's current directory, the same base every embed src is already
+// read relative to (see walk's use of "." and BuildDeployPath). Without
+// this check, an absolute src or a "../" traversal in site content lets a
+// page pull the contents of any file the build process can read into the
+// published output.
+func (gen *Generator) resolveEmbedSrc(src string) (string, error) {
+	root, err := filepath.Abs(".")
+	if err != nil {
+		return "", err
+	}
+	target, err := filepath.Abs(src)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("embed src %q escapes the site root", src)
+	}
+	return target, nil
+}
+
 // Markdown embeds a Markdown file.
 func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
-		mdInput, err := os.ReadFile(src)
+		resolved, err := gen.resolveEmbedSrc(src)
+		if err != nil {
+			return err
+		}
+		mdInput, err := os.ReadFile(resolved)
 		if err != nil {
 			return err
 		}
@@ -793,19 +823,23 @@ func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *
 // Plain embeds a plain text file.
 func (gen *Generator) Plain(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
+		resolved, err := gen.resolveEmbedSrc(src)
+		if err != nil {
+			return err
+		}
 		var input []byte
-		input, err = os.ReadFile(src)
+		input, err = os.ReadFile(resolved)
 		if err != nil {
 			return err
 		}
 		var template *ttext.Template
 		template, err = ttext.New("current").Parse(string(input))
 		if err != nil {
-			return
+			return err
 		}
 		var processed bytes.Buffer
 		if err = template.Execute(&processed, data); err != nil {
-			return
+			return err
 		}
 		e.ReplaceWithNodes(&html5.Node{Type: html5.TextNode, Data: processed.String()})
 	}
@@ -815,15 +849,19 @@ func (gen *Generator) Plain(e *goquery.Selection, _ *goquery.Document, data *Zas
 // Html embeds a HTML file.
 func (gen *Generator) Html(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
+		resolved, err := gen.resolveEmbedSrc(src)
+		if err != nil {
+			return err
+		}
 		var input []byte
-		input, err = os.ReadFile(src)
+		input, err = os.ReadFile(resolved)
 		if err != nil {
 			return err
 		}
 		var htmlDoc *goquery.Document
 		htmlDoc, err = gen.parseAndReplace(*bytes.NewBuffer(input), data)
 		if err != nil {
-			return
+			return err
 		}
 		e.ReplaceWithSelection(htmlDoc.Children())
 	}
