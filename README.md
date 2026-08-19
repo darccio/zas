@@ -174,6 +174,19 @@ Keep in mind that any file will be treated as a Go text template before any furt
 * `{{.Resolve id}}`: indirect access to site, directory and page config. It works with simple keys (no paths), checking for them in page, directory and site config (as `/site/<id>`), in this order.
 * `{{.Language}}`: file current language, if defined in the first comment (as YAML property `language`). By default, `/site/language` value.
 
+If a file's own content needs to contain literal `{{...}}` - a Vue/Angular/Handlebars snippet, Go template documentation, or a code sample showing off Zas's own template syntax - set `template: false` in its config comment instead of escaping every brace:
+
+```markdown
+<!--
+title: Templating in Zas
+template: false
+-->
+Zas actions look like `{{.Title}}`, and this whole page is written to
+show them off, so it opts out of being templated itself.
+```
+
+The file is still fully parsed and processed otherwise (HTML5 parsing, `<embed>`, and its own config comment - `title` above still works), only its content is never run through `text/template`. Defaults to `true` (templated), so existing files are unaffected.
+
 ### What about layout.html?
 
 It is plain HTML. No frills. Just add a placeholder `{{.Body}}` in your template.

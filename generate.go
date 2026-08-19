@@ -685,24 +685,75 @@ func (gen *Generator) setCachedDirConfig(path string, entry dirConfigEntry) {
 	gen.cachedZasDirectoryConfigs[path] = entry
 }
 
+// pageConfigCommentRe extracts a page's leading config comment straight
+// from its raw source bytes, tolerating a single leading <!DOCTYPE ...>
+// ahead of it (the same tolerance extractPageConfig has once the document
+// is fully HTML5-parsed) and any whitespace before either. It exists only
+// so pageOptsOutOfTemplating can decide, before text/template ever runs,
+// whether it should run at all - see that function and the comment on
+// render's ttext.New call below for why extractPageConfig itself can't be
+// used for this.
+var pageConfigCommentRe = regexp.MustCompile(`(?is)\A\s*(?:<!DOCTYPE[^>]*>\s*)?<!--(.*?)-->`)
+
+// pageOptsOutOfTemplating reports whether input's leading config comment
+// sets "template: false", letting a whole page skip text/template
+// parsing/execution so its content - including any literal {{ }} it
+// contains - reaches the rest of the pipeline unexecuted. This is for
+// pages that use {{ }} for something other than Zas's own templating: a
+// Vue/Angular/Handlebars snippet, Go-template documentation, or a code
+// sample demonstrating Zas's own template syntax.
+//
+// It has to inspect input's raw bytes directly, before ttext.New(...).Parse
+// runs. extractPageConfig reads this same leading comment for every other
+// page-config key (title, language, ...), but only runs later in render, on
+// the document produced by executing that very template - so by the time
+// it could report "template: false", template execution has already
+// happened (or already failed). A comment that isn't valid YAML is treated
+// the same as one without a "template" key (templating proceeds as
+// before): extractPageConfig will report the same malformed comment once
+// the page reaches it further down the pipeline, so it doesn't need to be
+// reported twice.
+func pageOptsOutOfTemplating(input []byte) bool {
+	m := pageConfigCommentRe.FindSubmatch(input)
+	if m == nil {
+		return false
+	}
+	var config map[interface{}]interface{}
+	if err := yaml.Unmarshal(m[1], &config); err != nil {
+		return false
+	}
+	runTemplate, ok := config["template"].(bool)
+	return ok && !runTemplate
+}
+
 /*
  * Generic render function. It expects input to be a valid HTML document.
- * Input can be a valid Go template.
+ * Input can be a valid Go template, unless its leading config comment
+ * opts out with "template: false" (see pageOptsOutOfTemplating).
  */
 func (gen *Generator) render(path string, input []byte) (err error) {
-	template, err := ttext.New("current").Parse(string(input))
-	if err != nil {
-		return
-	}
 	var processed bytes.Buffer
 	// Building context and rendering template.
 	data := NewZasData(path, gen)
 	data.Directory, _, _ = gen.loadZasDirectoryConfig(path)
-	// Pass a pointer: text/template only sees pointer-receiver methods
-	// (Title, E, URL, ...) on an addressable value, and a plain "data" here
-	// is not addressable.
-	if err = template.Execute(&processed, &data); err != nil {
-		return
+	if pageOptsOutOfTemplating(input) {
+		// input flows through unchanged: no text/template parsing or
+		// execution at all, so a literal {{ }} anywhere in it - including
+		// inside a fenced code block - survives verbatim into the rest of
+		// the pipeline below (HTML5 parsing, embeds, page config, ...),
+		// exactly like every other byte of a normal page would.
+		_, _ = processed.Write(input)
+	} else {
+		var template *ttext.Template
+		if template, err = ttext.New("current").Parse(string(input)); err != nil {
+			return
+		}
+		// Pass a pointer: text/template only sees pointer-receiver methods
+		// (Title, E, URL, ...) on an addressable value, and a plain "data" here
+		// is not addressable.
+		if err = template.Execute(&processed, &data); err != nil {
+			return
+		}
 	}
 	doc, err := gen.parseAndReplace(processed, &data)
 	if err != nil {
