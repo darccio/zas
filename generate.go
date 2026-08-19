@@ -685,7 +685,18 @@ func (gen *Generator) setCachedDirConfig(path string, entry dirConfigEntry) {
 	gen.cachedZasDirectoryConfigs[path] = entry
 }
 
-// pageConfigCommentRe extracts a page's leading config comment straight
+// doctypePrefix and commentOpen/commentClose are the literal delimiters
+// leadingConfigComment scans for. Matching regexp's (?is) \s class exactly,
+// not unicode.IsSpace, is what makes isConfigSpace its own function below
+// rather than a reuse of a stdlib whitespace check.
+const (
+	doctypePrefix = "<!DOCTYPE"
+	commentOpen   = "<!--"
+)
+
+var commentClose = []byte("-->")
+
+// leadingConfigComment extracts a page's leading config comment straight
 // from its raw source bytes, tolerating a single leading <!DOCTYPE ...>
 // ahead of it (the same tolerance extractPageConfig has once the document
 // is fully HTML5-parsed) and any whitespace before either. It exists only
@@ -693,7 +704,85 @@ func (gen *Generator) setCachedDirConfig(path string, entry dirConfigEntry) {
 // whether it should run at all - see that function and the comment on
 // render's ttext.New call below for why extractPageConfig itself can't be
 // used for this.
-var pageConfigCommentRe = regexp.MustCompile(`(?is)\A\s*(?:<!DOCTYPE[^>]*>\s*)?<!--(.*?)-->`)
+//
+// It walks input by hand as a small state machine - skip whitespace, try
+// an optional doctype, skip whitespace again, require the comment to open
+// immediately, then scan for its close - instead of using regexp, since
+// this runs once per source file on every render() call and is on the hot
+// path for a large site. It reproduces
+// `(?is)\A\s*(?:<!DOCTYPE[^>]*>\s*)?<!--(.*?)-->` byte for byte: in
+// particular the scan for "-->" stops at the *first* occurrence (a later
+// comment further into input must never count), and any mismatch anchored
+// at the very start of input - after whitespace/doctype - means there is
+// no leading comment at all.
+func leadingConfigComment(input []byte) ([]byte, bool) {
+	i := skipConfigSpace(input, 0)
+	if hasFoldPrefix(input[i:], doctypePrefix) {
+		end := bytes.IndexByte(input[i:], '>')
+		if end < 0 {
+			// No closing '>' for the doctype: the optional group can't
+			// have matched, but input at i still starts with "<!DOCTYPE",
+			// which can never also start with "<!--", so there is no
+			// leading comment either way.
+			return nil, false
+		}
+		i += end + 1
+		i = skipConfigSpace(input, i)
+	}
+	if !hasPrefix(input[i:], commentOpen) {
+		return nil, false
+	}
+	i += len(commentOpen)
+	end := bytes.Index(input[i:], commentClose)
+	if end < 0 {
+		return nil, false
+	}
+	return input[i : i+end], true
+}
+
+// skipConfigSpace advances i past any run of configSpace bytes.
+func skipConfigSpace(input []byte, i int) int {
+	for i < len(input) && isConfigSpace(input[i]) {
+		i++
+	}
+	return i
+}
+
+// isConfigSpace reports whether b is one of regexp's \s bytes
+// ([\t\n\f\r ]), matching the whitespace class the original
+// pageConfigCommentRe relied on exactly.
+func isConfigSpace(b byte) bool {
+	switch b {
+	case '\t', '\n', '\f', '\r', ' ':
+		return true
+	}
+	return false
+}
+
+// hasPrefix reports whether b starts with prefix. Comparing a sliced
+// []byte-to-string conversion with == is a case the compiler recognizes
+// and doesn't allocate for.
+func hasPrefix(b []byte, prefix string) bool {
+	return len(b) >= len(prefix) && string(b[:len(prefix)]) == prefix
+}
+
+// hasFoldPrefix is hasPrefix's ASCII case-insensitive counterpart, used
+// only for the (case-insensitive) "<!DOCTYPE" tag.
+func hasFoldPrefix(b []byte, prefix string) bool {
+	if len(b) < len(prefix) {
+		return false
+	}
+	for i := 0; i < len(prefix); i++ {
+		c := b[i]
+		if 'a' <= c && c <= 'z' {
+			c -= 'a' - 'A'
+		}
+		if c != prefix[i] {
+			return false
+		}
+	}
+	return true
+}
 
 // pageOptsOutOfTemplating reports whether input's leading config comment
 // sets "template: false", letting a whole page skip text/template
@@ -714,12 +803,12 @@ var pageConfigCommentRe = regexp.MustCompile(`(?is)\A\s*(?:<!DOCTYPE[^>]*>\s*)?<
 // the page reaches it further down the pipeline, so it doesn't need to be
 // reported twice.
 func pageOptsOutOfTemplating(input []byte) bool {
-	m := pageConfigCommentRe.FindSubmatch(input)
-	if m == nil {
+	content, ok := leadingConfigComment(input)
+	if !ok {
 		return false
 	}
 	var config map[interface{}]interface{}
-	if err := yaml.Unmarshal(m[1], &config); err != nil {
+	if err := yaml.Unmarshal(content, &config); err != nil {
 		return false
 	}
 	runTemplate, ok := config["template"].(bool)
