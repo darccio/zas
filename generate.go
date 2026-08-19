@@ -419,6 +419,23 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 		}
 		return nil
 	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		// filepath.Walk calls os.Lstat, so a symlinked directory arrives
+		// here with info.IsDir() == false - Lstat reports the link itself,
+		// not its target - which used to fall through to the file branch
+		// below and reach copy(), whose os.Open follows the link and then
+		// fails writing a regular file where a directory belongs. A
+		// symlinked file has the same Lstat shape and used to be copied by
+		// silently dereferencing it, with no indication in the output that
+		// the source was ever a link. Skip both explicitly instead: a
+		// symlinked directory can point anywhere on the filesystem the
+		// build process can read - the same containment concern
+		// resolveEmbedSrc already handles for <embed src> - and following
+		// it would additionally need its own cycle detection, since
+		// filepath.Walk doesn't resolve symlinks on its own.
+		gen.printLine("~", path, "(symlink, not followed)")
+		return nil
+	}
 	if info.IsDir() {
 		ierr = os.MkdirAll(gen.BuildDeployPath(path), os.FileMode(ZAS_DEFAULT_DIR_PERM))
 	} else if gen.sourceIsNewer(path, info) {
