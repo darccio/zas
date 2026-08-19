@@ -64,3 +64,55 @@ func TestRenderPageBodyCanCallPointerReceiverMethod(t *testing.T) {
 		t.Fatalf("deployed output = %q, want it to contain %q", out, want)
 	}
 }
+
+// extractPageConfig used to only look at the document's literal first
+// child, so a leading "<!DOCTYPE html>" (or anything else parsed as a
+// sibling ahead of the comment) pushed the config comment out of that slot
+// and its config was silently dropped - the page fell back to its <h1> text
+// as the title instead of erroring. These two tests render otherwise
+// identical pages, one with a leading doctype and one without, and confirm
+// both pick up the title override from their config comment rather than
+// falling back to the <h1>.
+
+func TestExtractPageConfigFoundAfterLeadingDoctype(t *testing.T) {
+	testExtractPageConfigTitleOverride(t, "<!DOCTYPE html>\n<!-- title: Overridden -->\n<h1>Ignored</h1>")
+}
+
+func TestExtractPageConfigFoundAsFirstLine(t *testing.T) {
+	testExtractPageConfigTitleOverride(t, "<!-- title: Overridden -->\n<h1>Ignored</h1>")
+}
+
+func testExtractPageConfigTitleOverride(t *testing.T, source string) {
+	t.Helper()
+	t.Chdir(t.TempDir())
+	if err := os.MkdirAll("deploy", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gen := &Generator{
+		Config: ConfigSection{
+			"zas": ConfigSection{"deploy": "deploy"},
+		},
+		I18n: &gt.Build{Index: gt.Strings{}, Origin: "en"},
+	}
+	layout, err := thtml.New("layout").Funcs(helpers).Parse(`{{.Title}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gen.Layout = layout
+
+	if err := gen.render("page.html", []byte(source)); err != nil {
+		t.Fatalf("render() error = %v, want nil", err)
+	}
+
+	out, err := os.ReadFile(filepath.Join("deploy", "page.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "Overridden") {
+		t.Fatalf("deployed output = %q, want it to contain the config comment's title %q", got, "Overridden")
+	}
+	if strings.Contains(got, "Ignored") {
+		t.Fatalf("deployed output = %q, want it to not fall back to the <h1> title %q", got, "Ignored")
+	}
+}
