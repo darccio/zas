@@ -225,3 +225,115 @@ func TestRunVersion(t *testing.T) {
 		})
 	}
 }
+
+// TestRunPluginDispatchIsCaseInsensitive covers the casing-consistency fix:
+// internal dispatch already lower-cases args[0] before matching against the
+// subcommands table, so plugin dispatch must fold the command name the same
+// way before looking for a zs<name> binary. Without the fix, only the
+// all-lowercase spelling would find the (lowercase-named) stub binary; the
+// mixed- and upper-case spellings would fail with "unknown command" even
+// though the same plugin is unambiguously being asked for.
+func TestRunPluginDispatchIsCaseInsensitive(t *testing.T) {
+	dir := t.TempDir()
+	writeStubPlugin(t, dir, "zsstubcase", "exit 0")
+	t.Setenv("PATH", dir)
+
+	for _, arg := range []string{"stubcase", "StubCase", "STUBCASE"} {
+		t.Run(arg, func(t *testing.T) {
+			if code := run([]string{arg}); code != 0 {
+				t.Errorf("run([]string{%q}) = %d, want 0", arg, code)
+			}
+		})
+	}
+}
+
+// TestRunUnexpectedPositionalArgumentRejected covers the fix for silently
+// dropped positional arguments: leftover non-flag arguments after
+// cmd.Flag.Parse are now a usage error (stderr message, exit code 2 - the
+// same code flag.Parse itself uses for a bad flag) instead of being
+// discarded. init and generate both take no positional arguments in their
+// own logic, so both must reject one identically rather than special-casing
+// either.
+func TestRunUnexpectedPositionalArgumentRejected(t *testing.T) {
+	for _, args := range [][]string{
+		{"generate", "-verbose", "some-unexpected-argument"},
+		{"init", "some-unexpected-argument"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var code int
+			out := captureOutput(t, &os.Stderr, func() {
+				code = run(args)
+			})
+
+			if code != 2 {
+				t.Errorf("run(%v) = %d, want 2", args, code)
+			}
+			if !strings.Contains(out, "some-unexpected-argument") {
+				t.Errorf("stderr = %q, want it to mention the unexpected argument", out)
+			}
+		})
+	}
+}
+
+// TestRunHelpRejectsUnexpectedArgument is the symmetry check for the fix
+// above: help and version route through the exact same dispatch loop as
+// init and generate, so an unexpected positional argument must be rejected
+// there too, rather than being silently accepted by some subcommands and
+// rejected by others.
+func TestRunHelpRejectsUnexpectedArgument(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	var code int
+	out := captureOutput(t, &os.Stderr, func() {
+		code = run([]string{"help", "some-unexpected-argument"})
+	})
+
+	if code != 2 {
+		t.Errorf("run() = %d, want 2", code)
+	}
+	if !strings.Contains(out, "some-unexpected-argument") {
+		t.Errorf("stderr = %q, want it to mention the unexpected argument", out)
+	}
+}
+
+// TestRunPluginReceivesStdin covers the stdin fix: runPlugin previously
+// wired the plugin subprocess's stdout and stderr but not its stdin, so a
+// filter-style plugin reading piped input would see immediate EOF. The stub
+// here is a "cat", which echoes back whatever it reads from stdin; if the
+// fix works, that content shows up on zas's own stdout.
+func TestRunPluginReceivesStdin(t *testing.T) {
+	dir := t.TempDir()
+	writeStubPlugin(t, dir, "zsstubecho", "cat")
+	// Unlike the other stub-plugin tests, PATH keeps the real system
+	// directories (after dir, so the stub still wins on name collisions):
+	// the stub script itself execs the real "cat" binary to copy stdin to
+	// stdout, so it needs "cat" to be findable too.
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	origStdin := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	os.Stdin = r
+	defer func() { os.Stdin = origStdin }()
+
+	const piped = "some piped input"
+	go func() {
+		_, _ = w.WriteString(piped)
+		_ = w.Close()
+	}()
+
+	var code int
+	out := captureOutput(t, &os.Stdout, func() {
+		code = run([]string{"stubecho"})
+	})
+
+	if code != 0 {
+		t.Errorf("run() = %d, want 0", code)
+	}
+	if !strings.Contains(out, piped) {
+		t.Errorf("stdout = %q, want it to contain the piped stdin content %q", out, piped)
+	}
+}
