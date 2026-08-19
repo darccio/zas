@@ -174,6 +174,10 @@ Keep in mind that any file will be treated as a Go text template before any furt
 * `{{.Resolve id}}`: indirect access to site, directory and page config. It works with simple keys (no paths), checking for them in page, directory and site config (as `/site/<id>`), in this order.
 * `{{.Language}}`: file current language, if defined in the first comment (as YAML property `language`). By default, `/site/language` value.
 
+There is also a page config property that isn't exposed as a template field, since it steers generation itself rather than the page's content:
+
+* `publish`: set to `false` in a file's config comment to keep that file out of `.zas/deploy` as a standalone page, while it stays fully available to be pulled into another page via `<embed>`. Defaults to `true` (published), so existing files are unaffected.
+
 ### What about layout.html?
 
 It is plain HTML. No frills. Just add a placeholder `{{.Body}}` in your template.
@@ -196,6 +200,16 @@ No problem! Just use our old friend `<embed>`. Imagine `<layout>` is a valid tag
 ```
 
 What does it mean? It means you can have .html files with embedded markdown files. Or anything else supported by Zas.
+
+`navigation.md` here probably isn't meant to be its own page, only content embedded into others - so mark it with `publish: false` in its own config comment:
+
+```markdown
+<!-- publish: false -->
+* [Home](/)
+* [About](/about.html)
+```
+
+Zas still reads and processes `navigation.md` normally wherever it's embedded, but it won't also show up on its own at `/navigation.html` in the deploy output.
 
 ## 你会说普通话?
 

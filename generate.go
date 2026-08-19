@@ -496,6 +496,13 @@ func (gen *Generator) renderAsync(path string) {
 
 /*
  * Real reaping function. Reaps all missing source files in current deployment path.
+ *
+ * This only reaps deploy output whose source file no longer exists; it does
+ * not detect a source file that still exists but newly opted out of
+ * standalone publishing via "publish: false" (see pagePublished). That
+ * page's previous deploy output is left behind by an incremental run - a
+ * -full run, which clears the whole deploy directory upfront, is needed to
+ * remove it.
  */
 func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error) {
 	if err != nil {
@@ -733,7 +740,44 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 			}
 		}
 	}
+	if !pagePublished(data.Page) {
+		// This is the answer to upstream issue #15 ("How can we exclude a
+		// file from the generation loop?"): a page opts out of being
+		// written to the deploy directory as its own standalone file with
+		// "publish: false" in its config comment - e.g. a partial that only
+		// ever makes sense embedded into another page via <embed>. The file
+		// is still fully parsed above (so its own template/embeds/page
+		// config all work exactly as before) and stays fully readable and
+		// processable when pulled in elsewhere: Markdown/Plain/Html read
+		// and process the target file directly via os.ReadFile and
+		// resolveEmbedSrc, independent of this decision.
+		//
+		// The flag only lives inside the page's own content, so walk can't
+		// know about it before render parses this far - meaning an
+		// excluded page never has a deploy output for sourceIsNewer to
+		// compare mtimes against, and so is treated as stale (fully
+		// re-parsed, though never written) on every incremental run. This
+		// is a minor inefficiency, not a correctness bug.
+		//
+		// It also means reaper - which only removes deploy output whose
+		// source no longer exists - won't notice a page that keeps
+		// existing but newly opts out with "publish: false": a
+		// previously-published file's stale output under .zas/deploy
+		// survives an incremental run and needs a -full run (which clears
+		// the whole deploy directory upfront) to actually disappear.
+		return nil
+	}
 	return gen.Generate(path, &data)
+}
+
+// pagePublished reports whether a page should be written to the deploy
+// directory as its own standalone file. A page opts out with "publish:
+// false" in its config comment; any other value, or the key's absence,
+// keeps the pre-existing default of publishing every page render
+// produces.
+func pagePublished(page map[interface{}]interface{}) bool {
+	publish, ok := page["publish"].(bool)
+	return !ok || publish
 }
 
 /*
