@@ -87,6 +87,32 @@ func TestIsHomeOK(t *testing.T) {
 	}
 }
 
+// URL used to concatenate BaseURL and Path with no normalization, so a
+// BaseURL configured with a trailing slash (an easy, unenforced mistake -
+// the README says "without final slash" but nothing checks it) produced a
+// double slash where the two met, since Path always starts with its own
+// leading slash.
+
+func TestURLTrimsTrailingSlashFromBaseURL(t *testing.T) {
+	zd := &ZasData{
+		Site: ZasSiteData{BaseURL: "http://example.com/"},
+		Path: "/page.html",
+	}
+	if got, want := zd.URL(), "http://example.com/page.html"; got != want {
+		t.Fatalf("URL() = %q, want %q", got, want)
+	}
+}
+
+func TestURLWithoutTrailingSlashUnchanged(t *testing.T) {
+	zd := &ZasData{
+		Site: ZasSiteData{BaseURL: "http://example.com"},
+		Path: "/page.html",
+	}
+	if got, want := zd.URL(), "http://example.com/page.html"; got != want {
+		t.Fatalf("URL() = %q, want %q", got, want)
+	}
+}
+
 func TestEPropagatesLanguageError(t *testing.T) {
 	zd := &ZasData{
 		Page: map[interface{}]interface{}{"language": 5},
