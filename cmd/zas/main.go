@@ -113,6 +113,15 @@ func run(args []string) int {
 				return 2
 			}
 
+			// Anything left over after flag parsing is a positional
+			// argument none of the internal subcommands accept; silently
+			// discarding it would let typos and misplaced arguments through
+			// unnoticed, so treat it the same as a flag.Parse usage error.
+			if extra := cmd.Flag.Args(); len(extra) > 0 {
+				fmt.Fprintf(os.Stderr, "%s: unexpected argument(s): %s\n", cmd.Name, strings.Join(extra, " "))
+				return 2
+			}
+
 			if err := cmd.Run(); err != nil {
 				fmt.Fprintf(os.Stderr, "fatal: %s\n", err)
 				return 1
@@ -122,12 +131,17 @@ func run(args []string) int {
 		}
 	}
 
-	// No internal subcommand matched; try to exec an external Zas subcommand (plugin).
-	return runPlugin(args)
+	// No internal subcommand matched; try to exec an external Zas subcommand
+	// (plugin). command is already the lower-cased form of args[0] (see
+	// above), so plugin lookup is case-insensitive the same way internal
+	// dispatch is: "zas Hello", "zas HELLO", and "zas hello" all resolve to
+	// the same zs<name> binary on PATH.
+	return runPlugin(append([]string{command}, args[1:]...))
 }
 
 func runPlugin(args []string) int {
 	cmd := exec.Command(fmt.Sprintf("%s%s", zas.ZAS_PREFIX, args[0]), args[1:]...)
+	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
