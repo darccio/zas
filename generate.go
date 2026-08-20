@@ -169,6 +169,17 @@ type Generator struct {
 	// current reap walk. The reap walk is single-threaded, so no mutex.
 	reapedDirs map[string]struct{}
 
+	// dirEntriesFoldCache caches, per directory, the lowercased basenames
+	// of its entries - built lazily by existsFold on first use and reused
+	// for every other file existsFold is asked about in the same
+	// directory during the current reap walk. Without it, a directory
+	// with many files (case-insensitive extension matching means reaper
+	// can no longer trust a single exact-path os.Open, see existsFold)
+	// would re-read and re-scan the same directory listing once per file
+	// instead of once total. Like reapedDirs, the reap walk that fills
+	// this is single-threaded, so no mutex.
+	dirEntriesFoldCache map[string]map[string]struct{}
+
 	// claimedOutputs maps each deploy output path claimed so far to the
 	// source path that claimed it, so two sources that render to the same
 	// output (e.g. foo.md and foo.html) don't both spawn a renderAsync
@@ -222,15 +233,53 @@ func (gen *Generator) BuildDeployPath(path string) string {
 	return filepath.Join(gen.GetDeployPath(), path)
 }
 
-// swapExtension replaces path's trailing from extension with to. Paths not
+// hasExtension reports whether path ends in ext, matched case-insensitively
+// so PAGE.MD and page.Md are both recognized the same as page.md - a
+// filesystem that preserves the case a file was created with doesn't mean
+// every file on it was typed in the same case.
+func hasExtension(path, ext string) bool {
+	return len(path) >= len(ext) && strings.EqualFold(path[len(path)-len(ext):], ext)
+}
+
+// swapExtension replaces path's trailing from extension with to, matched
+// case-insensitively via hasExtension (so PAGE.MD swaps just like
+// page.md - always producing to's own casing, never from's). Paths not
 // ending in from are returned unchanged. Unlike strings.Replace/ReplaceAll,
 // this only ever touches the extension, never a from/to occurrence earlier
 // in path.
 func swapExtension(path, from, to string) string {
-	if !strings.HasSuffix(path, from) {
+	if !hasExtension(path, from) {
 		return path
 	}
-	return strings.TrimSuffix(path, from) + to
+	return path[:len(path)-len(from)] + to
+}
+
+// existsFold reports whether a file matching name exists in name's
+// directory, compared case-insensitively against the directory's actual
+// entries. reaper reconstructs a candidate source path from a deploy path
+// via swapExtension, which always normalizes to's own casing - so a guess
+// like "./page.md" needs to still find a real "PAGE.MD" source on a
+// case-sensitive filesystem. Each directory's entries are read at most
+// once per reap walk and cached in dirEntriesFoldCache: a directory with
+// many files would otherwise pay for a full re-read and re-scan of the
+// same listing once per file instead of once total.
+func (gen *Generator) existsFold(name string) bool {
+	dir := filepath.Dir(name)
+	names, ok := gen.dirEntriesFoldCache[dir]
+	if !ok {
+		names = map[string]struct{}{}
+		if entries, err := os.ReadDir(dir); err == nil {
+			for _, e := range entries {
+				names[strings.ToLower(e.Name())] = struct{}{}
+			}
+		}
+		if gen.dirEntriesFoldCache == nil {
+			gen.dirEntriesFoldCache = make(map[string]map[string]struct{})
+		}
+		gen.dirEntriesFoldCache[dir] = names
+	}
+	_, found := names[strings.ToLower(filepath.Base(name))]
+	return found
 }
 
 // atomicWriteFile calls write with a temporary file in path's own directory
@@ -512,9 +561,9 @@ func (gen *Generator) renderAsync(path string) {
 	}
 
 	switch {
-	case strings.HasSuffix(path, ".md"):
+	case hasExtension(path, ".md"):
 		err = gen.renderMarkdown(path)
-	case strings.HasSuffix(path, ".html"):
+	case hasExtension(path, ".html"):
 		err = gen.renderHTML(path)
 	default:
 		err = gen.copy(gen.BuildDeployPath(path), path)
@@ -554,11 +603,18 @@ func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error)
 	// TODO it must clean directories too
 	if err != nil {
 		reap := true
-		if strings.HasSuffix(sourcePath, ".html") {
+		if hasExtension(sourcePath, ".html") {
+			// swapExtension always normalizes to's own casing, so this
+			// guess (e.g. "./page.md") can only ever be lowercase,
+			// regardless of what case the real source used - a plain
+			// os.Open here would never find a differently-cased source
+			// like "PAGE.MD" on a case-sensitive filesystem. Note this
+			// isn't needed above: an .html-sourced deploy path is never
+			// extension-swapped at all (swapExtension's from is always
+			// ".md"), so it keeps the source's exact original casing, and
+			// plain os.Open above already matches it correctly.
 			sourcePath = swapExtension(sourcePath, ".html", ".md")
-			sourceNew, err := os.Open(sourcePath)
-			if err == nil {
-				_ = sourceNew.Close()
+			if gen.existsFold(sourcePath) {
 				reap = false
 			}
 		}
