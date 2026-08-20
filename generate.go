@@ -784,6 +784,73 @@ func hasFoldPrefix(b []byte, prefix string) bool {
 	return true
 }
 
+// templateKey is the one map key pageOptsOutOfTemplating cares about.
+// bomUTF16LE/bomUTF16BE are the two byte-order marks yaml.v2 recognizes at
+// the very start of a stream - see mayDefineTemplateKey, the only place
+// either is used.
+var templateKey = []byte("template")
+
+const (
+	bomUTF16LE = "\xff\xfe"
+	bomUTF16BE = "\xfe\xff"
+)
+
+// mayDefineTemplateKey reports whether content could possibly decode to a
+// YAML mapping containing the exact key "template", without actually
+// running the parser to find out. It exists to keep yaml.Unmarshal off the
+// hot path: gopkg.in/yaml.v2's yaml_parser_initialize allocates the
+// parser's two I/O buffers (512 and 1536 bytes) on every single Unmarshal
+// call regardless of input size, so asking an eleven-byte
+// "<!-- title: Hi -->" comment for a key it doesn't have costs ~4.5us and
+// ~5.5KB - once per page, on every render, across renderConcurrency()
+// goroutines.
+//
+// A false positive here only costs the yaml parse that would have run
+// anyway, so the bar is one-sided: this must never say false for content
+// yaml would in fact decode with a "template" key. Every YAML 1.1
+// construct that can put a key into the map either reproduces that key's
+// bytes verbatim or needs one of the three markers checked below - verified
+// against gopkg.in/yaml.v2 v2.4.0's actual source, not just the spec:
+//
+//   - Plain and single-quoted scalars reproduce their bytes. A line break
+//     inside one folds to a space, so "temp\nlate" decodes as "temp late"
+//     and can never be rejoined into "template"; block scalars (| and >),
+//     explicit "? " keys and flow mappings are just other ways to spell
+//     those same bytes. Anchors, aliases and "<<" merge keys can only
+//     reach a key some node in this very document already spells out, and
+//     yaml.Unmarshal is handed nothing but the comment's own bytes.
+//   - A double-quoted scalar can synthesize the key ("\x74emplate", or a
+//     backslash-newline continuation joining "temp" and "late"), but every
+//     such form needs a backslash.
+//   - So can a tag: yaml.v2 base64-decodes !!binary into a Go string
+//     (decode.go's scalar case deliberately excludes yaml_BINARY_TAG from
+//     resolvableTag in resolve.go, so it skips normal resolution and hits
+//     the base64 branch instead), which makes
+//     "<!-- !!binary dGVtcGxhdGU=: false -->" - base64 of "template" - a
+//     real opt-out today that never spells the key in the comment. Every
+//     way to name that tag - the !! shorthand, a verbatim !<...>, or a
+//     %TAG-remapped handle - puts a '!' somewhere in the document, because
+//     a tag handle is delimited by them.
+//   - The bytes need not be UTF-8 at all. yaml.v2 sniffs a UTF-16 byte
+//     order mark and transcodes (readerc.go's
+//     yaml_parser_determine_encoding), so a comment body opening with
+//     FF FE spells the key as 74 00 65 00 ... instead of literal ASCII.
+//     That sniff happens once, at the very start of the stream and
+//     nowhere else, so a two-byte prefix check is exact rather than
+//     another scan.
+//
+// The key is matched case-sensitively on purpose: the lookup this feeds is
+// config["template"], an exact Go string comparison, so "Template: false"
+// is not an opt-out today and must not become one here.
+func mayDefineTemplateKey(content []byte) bool {
+	if hasPrefix(content, bomUTF16LE) || hasPrefix(content, bomUTF16BE) {
+		return true
+	}
+	return bytes.Contains(content, templateKey) ||
+		bytes.IndexByte(content, '\\') >= 0 ||
+		bytes.IndexByte(content, '!') >= 0
+}
+
 // pageOptsOutOfTemplating reports whether input's leading config comment
 // sets "template: false", letting a whole page skip text/template
 // parsing/execution so its content - including any literal {{ }} it
@@ -807,6 +874,12 @@ func pageOptsOutOfTemplating(input []byte) bool {
 	if !ok {
 		return false
 	}
+	if !mayDefineTemplateKey(content) {
+		// yaml could only confirm what the scan above already
+		// established, and it is by far the most expensive thing this
+		// function does - see mayDefineTemplateKey.
+		return false
+	}
 	var config map[interface{}]interface{}
 	if err := yaml.Unmarshal(content, &config); err != nil {
 		return false
@@ -814,6 +887,18 @@ func pageOptsOutOfTemplating(input []byte) bool {
 	runTemplate, ok := config["template"].(bool)
 	return ok && !runTemplate
 }
+
+// templateActionOpen is text/template's default left delimiter, and the
+// only one render's template ever uses - nothing in this repo calls
+// ttext.New(...).Delims(...). A page containing no "{{" anywhere therefore
+// has no template actions at all: not a "{{- -}}" trim marker, not a
+// "{{/* */}}" comment, since text/template's lexer (lexText in
+// text/template/parse/lex.go) only reaches either past this same
+// delimiter. With none present, Parse builds a tree holding a single text
+// node and Execute copies it back out byte for byte - so render's
+// no-templating branch below produces the identical result without paying
+// for string(input)'s full-file copy or the parse/execute round trip.
+var templateActionOpen = []byte("{{")
 
 /*
  * Generic render function. It expects input to be a valid HTML document.
@@ -825,7 +910,18 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	// Building context and rendering template.
 	data := NewZasData(path, gen)
 	data.Directory, _, _ = gen.loadZasDirectoryConfig(path)
-	if pageOptsOutOfTemplating(input) {
+	// The "{{" check goes first, and that order is load-bearing rather
+	// than stylistic: when input has no "{{" at all, templating and the
+	// opt-out branch below produce byte-identical output regardless of
+	// what the page's config comment says, so pageOptsOutOfTemplating's
+	// answer cannot change the outcome, and || short-circuits it away
+	// entirely. That matters because mayDefineTemplateKey's guards are
+	// deliberately one-sided (an innocuous "!" or backslash anywhere in
+	// the comment - "Hi!", a Windows path in a title - still falls
+	// through to a real yaml.Unmarshal); putting bytes.Contains first
+	// means a plain page never pays for that parse over a question whose
+	// answer was never going to matter.
+	if !bytes.Contains(input, templateActionOpen) || pageOptsOutOfTemplating(input) {
 		// input flows through unchanged: no text/template parsing or
 		// execution at all, so a literal {{ }} anywhere in it - including
 		// inside a fenced code block - survives verbatim into the rest of

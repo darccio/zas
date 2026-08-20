@@ -28,6 +28,17 @@ import (
 	"github.com/melvinmt/gt"
 )
 
+// utf16leBOM prepends a UTF-16LE byte-order mark and encodes s as
+// UTF-16LE, reproducing the shape yaml.v2 transcodes internally - see the
+// "utf-16le comment body still opts out" case below and mayDefineTemplateKey.
+func utf16leBOM(s string) string {
+	out := []byte("\xff\xfe")
+	for _, r := range s {
+		out = append(out, byte(r), 0)
+	}
+	return string(out)
+}
+
 // Every page used to be unconditionally parsed and executed as a
 // text/template, with no way to opt out: a file containing literal {{ }}
 // that isn't valid template syntax (e.g. `{{ message }}`, documenting Zas's
@@ -87,6 +98,47 @@ func TestPageOptsOutOfTemplating(t *testing.T) {
 		{
 			name:  "template false later in the document doesn't count",
 			input: "<h1>Hi</h1>\n<!-- template: false -->",
+			want:  false,
+		},
+		// The remaining cases pin mayDefineTemplateKey's guards: each one
+		// is a real yaml.v2 construct that can decode to a "template" key
+		// without spelling the literal bytes "template" in the comment,
+		// found while proving the fast path can't just check for those
+		// bytes and a backslash. Deleting the '!' or BOM guard would make
+		// the "still opts out" cases below silently stop opting out.
+		{
+			name:  "!!binary-tagged key still opts out",
+			input: "<!-- !!binary dGVtcGxhdGU=: false -->\n<h1>Hi</h1>",
+			want:  true,
+		},
+		{
+			name:  "double-quoted escaped key still opts out",
+			input: `<!-- "\x74emplate": false -->` + "\n<h1>Hi</h1>",
+			want:  true,
+		},
+		{
+			name:  "utf-16le comment body still opts out",
+			input: "<!--" + utf16leBOM("template: false") + "-->\n<h1>Hi</h1>",
+			want:  true,
+		},
+		{
+			name:  "capitalized Template is not an opt-out",
+			input: "<!-- Template: false -->\n<h1>Hi</h1>",
+			want:  false,
+		},
+		{
+			name:  "template only inside a value stays an opt-in",
+			input: "<!-- title: Template gallery -->\n<h1>Hi</h1>",
+			want:  false,
+		},
+		{
+			name:  "exclamation mark in an unrelated value",
+			input: "<!-- title: Hi! -->\n<h1>Hi</h1>",
+			want:  false,
+		},
+		{
+			name:  "backslash in an unrelated value",
+			input: `<!-- title: C:\docs -->` + "\n<h1>Hi</h1>",
 			want:  false,
 		},
 	}
