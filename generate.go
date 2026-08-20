@@ -1169,7 +1169,15 @@ func (gen *Generator) extractPageConfig(doc *goquery.Document) (config map[inter
 }
 
 /*
- * Copies a file.
+ * Copies a file, preserving the source's permission bits (so an
+ * executable asset stays executable in deploy - atomicWriteFile would
+ * otherwise leave every copy at the fixed ZAS_DEFAULT_FILE_PERM).
+ * Source mtimes are deliberately not preserved: sourceIsNewer's
+ * incremental staleness check treats an equal source/deploy mtime as
+ * stale (its ">=", not ">", is itself a deliberate safe-direction
+ * choice), so copying the source's mtime onto the deploy file would
+ * make every asset look stale, and get recopied, on every incremental
+ * run.
  */
 func (gen *Generator) copy(dstPath, srcPath string) (err error) {
 	src, err := os.Open(srcPath)
@@ -1177,10 +1185,17 @@ func (gen *Generator) copy(dstPath, srcPath string) (err error) {
 		return
 	}
 	defer func() { _ = src.Close() }()
-	return gen.atomicWriteFile(dstPath, func(w io.Writer) error {
+	info, err := src.Stat()
+	if err != nil {
+		return err
+	}
+	if err = gen.atomicWriteFile(dstPath, func(w io.Writer) error {
 		_, err := io.Copy(w, src)
 		return err
-	})
+	}); err != nil {
+		return err
+	}
+	return os.Chmod(dstPath, info.Mode())
 }
 
 // resolveEmbedSrc resolves an <embed src="..."> attribute to an absolute
