@@ -8,7 +8,7 @@ import (
 	"github.com/melvinmt/gt"
 )
 
-// C2: every render used to share one *gt.Build, racing on SetTarget/
+// Every render used to share one *gt.Build, racing on SetTarget/
 // Translate's internal fields and letting one page's language bleed into
 // another's. Run under `go test -race`; also asserts each goroutine only
 // ever observes its own language's translation.

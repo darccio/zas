@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// B5: walk/reaper must return the incoming filepath.Walk error immediately,
+// walk/reaper must return the incoming filepath.Walk error immediately,
 // instead of touching a possibly-nil FileInfo first.
 
 func TestWalkPropagatesErr(t *testing.T) {
