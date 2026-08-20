@@ -223,7 +223,22 @@ func swapExtension(path, from, to string) string {
 // before the rename leaves it holding either its previous complete content
 // or nothing, never a partial write. On any error the temporary file is
 // removed instead of left behind.
+//
+// path's directory is created here, on demand, rather than upfront by
+// walk for every source directory it visits: a source directory whose
+// entire content is skipped (e.g. one holding only a .zas.yml) would
+// otherwise get a permanently empty counterpart in deploy, since nothing
+// else ever writes into it or cleans it up. Creating it only when there's
+// an actual file to place in it means a directory with no deployable
+// content never gets a deploy-side counterpart at all. os.MkdirAll is
+// safe to call concurrently for the same path - a race between two
+// renderAsync goroutines both wanting the same parent directory ends with
+// one creating it and the other finding it already there, neither an
+// error.
 func (gen *Generator) atomicWriteFile(path string, write func(io.Writer) error) (err error) {
+	if err = os.MkdirAll(filepath.Dir(path), os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
+		return err
+	}
 	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
@@ -435,9 +450,11 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 		gen.printLine("~", path, "(symlink, not followed)")
 		return nil
 	}
-	if info.IsDir() {
-		ierr = os.MkdirAll(gen.BuildDeployPath(path), os.FileMode(ZAS_DEFAULT_DIR_PERM))
-	} else if gen.sourceIsNewer(path, info) {
+	// A directory itself needs nothing done for it here: atomicWriteFile
+	// creates a source directory's deploy-side counterpart lazily, only
+	// once something actually needs to be written into it, so a directory
+	// whose entire content is skipped never gets an empty one in deploy.
+	if !info.IsDir() && gen.sourceIsNewer(path, info) {
 		outputPath := swapExtension(path, ".md", ".html")
 		if claimant, ok := gen.claimedOutputs[outputPath]; ok {
 			gen.recordErr(fmt.Errorf("%s: output path %q already claimed by %s, skipping", path, outputPath, claimant))
