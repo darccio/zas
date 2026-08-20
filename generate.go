@@ -258,7 +258,7 @@ func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
 	if err = gen.Layout.Execute(&processed, data); err != nil {
 		return
 	}
-	doc, err := gen.parseAndReplace(processed, data)
+	doc, err := gen.parseAndReplace(&processed, data)
 	if err != nil {
 		return
 	}
@@ -286,14 +286,14 @@ func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
 // goroutine's stack is exhausted.
 const maxEmbedDepth = 20
 
-func (gen *Generator) parseAndReplace(processed bytes.Buffer, data *ZasData) (doc *goquery.Document, err error) {
+func (gen *Generator) parseAndReplace(processed io.Reader, data *ZasData) (doc *goquery.Document, err error) {
 	if data.embedDepth >= maxEmbedDepth {
 		return nil, fmt.Errorf("embed nesting deeper than %d levels; check for a self- or mutually-embedding file", maxEmbedDepth)
 	}
 	data.embedDepth++
 	defer func() { data.embedDepth-- }()
 	// Here we manipulate its result.
-	doc, err = goquery.NewDocumentFromReader(&processed)
+	doc, err = goquery.NewDocumentFromReader(processed)
 	if err != nil {
 		return
 	}
@@ -1043,7 +1043,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 			return
 		}
 	}
-	doc, err := gen.parseAndReplace(processed, &data)
+	doc, err := gen.parseAndReplace(&processed, &data)
 	if err != nil {
 		return
 	}
@@ -1239,7 +1239,7 @@ func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *
 		if err := markdownConverter.Convert(mdInput, &b); err != nil {
 			return err
 		}
-		mdDoc, err := gen.parseAndReplace(b, data)
+		mdDoc, err := gen.parseAndReplace(&b, data)
 		if err != nil {
 			return err
 		}
@@ -1287,7 +1287,7 @@ func (gen *Generator) Html(e *goquery.Selection, _ *goquery.Document, data *ZasD
 			return err
 		}
 		var htmlDoc *goquery.Document
-		htmlDoc, err = gen.parseAndReplace(*bytes.NewBuffer(input), data)
+		htmlDoc, err = gen.parseAndReplace(bytes.NewBuffer(input), data)
 		if err != nil {
 			return err
 		}
