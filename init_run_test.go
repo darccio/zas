@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// B1: Init.Run must return an error instead of panicking on a write failure.
+// Init.Run must return an error instead of panicking on a write failure.
 
 func TestInitRunWriteFailureReturnsError(t *testing.T) {
 	t.Chdir(t.TempDir())

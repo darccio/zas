@@ -2,7 +2,7 @@ package zas
 
 import "testing"
 
-// B2: ConfigSection.GetString/GetSection must return zero values instead of
+// ConfigSection.GetString/GetSection must return zero values instead of
 // panicking on a missing or wrongly-typed key.
 
 func TestGetStringMissingKey(t *testing.T) {
