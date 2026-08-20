@@ -19,21 +19,21 @@ import (
 // confirm both kinds are now skipped explicitly, with a message, instead of
 // either mishandling.
 
-// captureStdout redirects os.Stdout for the duration of fn and returns
-// everything written to it.
-func captureStdout(t *testing.T, fn func()) string {
+// captureStderr redirects os.Stderr for the duration of fn and returns
+// everything written to it. printLine (generate.go) writes there.
+func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
-	orig := os.Stdout
+	orig := os.Stderr
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Stdout = w
+	os.Stderr = w
 	fn()
 	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
-	os.Stdout = orig
+	os.Stderr = orig
 	out, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestWalkSkipsSymlinkedDirectoryWithMessage(t *testing.T) {
 	}
 	gen := &Generator{}
 	var walkErr error
-	out := captureStdout(t, func() {
+	out := captureStderr(t, func() {
 		walkErr = gen.walk("linkdir", info, nil)
 	})
 	if walkErr != nil {
@@ -84,7 +84,7 @@ func TestWalkSkipsSymlinkedFileWithMessage(t *testing.T) {
 	}
 	gen := &Generator{}
 	var walkErr error
-	out := captureStdout(t, func() {
+	out := captureStderr(t, func() {
 		walkErr = gen.walk("link.txt", info, nil)
 	})
 	if walkErr != nil {

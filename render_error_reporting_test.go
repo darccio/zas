@@ -29,7 +29,7 @@ import (
 	"github.com/melvinmt/gt"
 )
 
-// captureStdout is defined in symlink_test.go and reused here.
+// captureStderr is defined in symlink_test.go and reused here.
 
 // newRenderTestGenerator builds a minimal Generator suitable for calling
 // render() directly, deploying into ./deploy under a fresh chdir'd temp
@@ -64,7 +64,7 @@ func TestRenderParseAndReplaceErrorNotPrintedInline(t *testing.T) {
 	src := `<body><embed src="x" type="text/x-nope"></body>`
 
 	var err error
-	stdout := captureStdout(t, func() {
+	stderr := captureStderr(t, func() {
 		err = gen.render("page.html", []byte(src))
 	})
 
@@ -74,8 +74,8 @@ func TestRenderParseAndReplaceErrorNotPrintedInline(t *testing.T) {
 	if !strings.Contains(err.Error(), "text/x-nope") {
 		t.Fatalf("render() error = %v, want it to mention the embed type", err)
 	}
-	if strings.Contains(stdout, "text/x-nope") {
-		t.Fatalf("render() printed the error directly to stdout (%q); it must be reported exactly once, by its caller", stdout)
+	if strings.Contains(stderr, "text/x-nope") {
+		t.Fatalf("render() printed the error directly (%q); it must be reported exactly once, by its caller", stderr)
 	}
 }
 
@@ -103,15 +103,15 @@ func TestRenderReportsMalformedPageConfigCommentButKeepsGoing(t *testing.T) {
 	src := "<!-- language: ru\n\tbad: true\n-->\n<h1>Hi</h1>"
 
 	var err error
-	stdout := captureStdout(t, func() {
+	stderr := captureStderr(t, func() {
 		err = gen.render("page.html", []byte(src))
 	})
 
 	if err != nil {
 		t.Fatalf("render() error = %v, want nil (a malformed page config comment must not abort the render)", err)
 	}
-	if !strings.Contains(stdout, "page.html") {
-		t.Fatalf("render() stdout = %q, want it to report the malformed page config comment", stdout)
+	if !strings.Contains(stderr, "page.html") {
+		t.Fatalf("render() stderr = %q, want it to report the malformed page config comment", stderr)
 	}
 
 	out, readErr := os.ReadFile(filepath.Join("deploy", "page.html"))
