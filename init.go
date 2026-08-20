@@ -120,13 +120,11 @@ func (i *Init) Run() error {
 	} else {
 		fmt.Printf("Reinitialized existing %s repository in %s\n", ZAS_NAME, path)
 	}
-	var data []byte
-	// If default config variable has fields, we store it as ZAS_CONF_FILE (as defined in constants.go).
-	// It overwrites every time we invoke init subcommand.
-	if len(ZAS_DEFAULT_CONF) > 0 {
-		if data, err = yaml.Marshal(&ZAS_DEFAULT_CONF); err != nil {
-			return err
-		}
+	// Stores ZAS_DEFAULT_CONF as ZAS_CONF_FILE (as defined in
+	// constants.go). Overwrites every time we invoke the init subcommand.
+	data, err := yaml.Marshal(&ZAS_DEFAULT_CONF)
+	if err != nil {
+		return err
 	}
 	return os.WriteFile(ZAS_CONF_FILE, data, os.FileMode(ZAS_DEFAULT_FILE_PERM))
 }
