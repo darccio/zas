@@ -894,6 +894,86 @@ func pageOptsOutOfTemplating(input []byte) bool {
 	return ok && !runTemplate
 }
 
+// earlyPageConfig extracts a best-effort preview of a page's own Page
+// config map straight from input's raw source bytes, before text/template
+// ever runs - the same raw, pre-execution approach leadingConfigComment
+// (and pageOptsOutOfTemplating, built on it) already take for the
+// "template: false" opt-out. It exists so a page's own body can read
+// {{.Page}} (and, through Title's fallback, {{.Title}}) as something other
+// than always empty: render otherwise only populates data.Page from
+// extractPageConfig, which runs on the fully rendered, HTML5-parsed
+// document - strictly after the page's own template has already executed
+// - so the exact same expression that works in the layout used to fail
+// silently inside the page's own body.
+//
+// This is deliberately only a preview. render's later, unconditional call
+// to extractPageConfig - itself untouched by this function - always
+// overwrites data.Page once the document is fully HTML5-parsed, so the
+// layout's own view of data.Page is completely unaffected by whatever this
+// returns. The two extractions are separate implementations of "find the
+// leading config comment" and can in principle disagree on some edge case
+// neither was built to handle identically; that is an acceptable rough
+// edge for a page's own internal, best-effort view, but would not be for
+// the canonical one extractPageConfig produces.
+//
+// A malformed or absent leading comment yields a nil map, matching
+// data.Page's own zero value and today's pre-fix empty behavior, rather
+// than surfacing a duplicate diagnostic: extractPageConfig already reports
+// a malformed comment once the page reaches it later in render.
+func earlyPageConfig(input []byte) map[interface{}]interface{} {
+	content, ok := leadingConfigComment(input)
+	if !ok {
+		return nil
+	}
+	var config map[interface{}]interface{}
+	if err := yaml.Unmarshal(content, &config); err != nil {
+		return nil
+	}
+	return config
+}
+
+// leadingH1Re matches the first <h1>...</h1> element in a document,
+// capturing its inner content. Used only by leadingH1Text.
+var leadingH1Re = regexp.MustCompile(`(?is)<h1[^>]*>(.*?)</h1>`)
+
+// leadingH1Text extracts the first <h1>...</h1> element's inner content
+// from input's raw source bytes, before text/template or HTML5 parsing
+// ever run - the same raw, pre-execution spirit as earlyPageConfig above.
+// It exists only to give a page's own body a best-effort preview of
+// {{.FirstTitle}} (and, through Title's fallback, {{.Title}}); render's
+// later, unconditional getTitle(doc) call - run on the fully HTML5-parsed
+// document, unchanged by this function - always overwrites data.FirstTitle
+// with the canonical value afterward, so the layout's own view is
+// completely unaffected by whatever preview this returns.
+//
+// Unlike getTitle, which walks a parsed tree and so sees plain text, any
+// inner HTML tags here are left exactly as written rather than stripped:
+// stripping them correctly needs the very HTML5 parse this function exists
+// to run ahead of. A raw preview that still contains markup (e.g. an <em>
+// inside the heading) is an acceptable rough edge for an early,
+// best-effort value that gets fully replaced moments later.
+//
+// It refuses to return content containing "{{": a heading written as
+// <h1>{{.Title}}</h1> - a natural pattern for showing the resolved title
+// in the page's own heading - would otherwise hand back the literal,
+// unexecuted string "{{.Title}}" as FirstTitle, and since Title() falls
+// back to FirstTitle when Page["title"] isn't set, that string would
+// circularly render as its own placeholder instead of either failing
+// loudly or resolving. Leaving FirstTitle unset in that case reproduces
+// today's safe, empty behavior instead of exposing template syntax as if
+// it were real content.
+func leadingH1Text(input []byte) (string, bool) {
+	m := leadingH1Re.FindSubmatch(input)
+	if m == nil {
+		return "", false
+	}
+	content := m[1]
+	if bytes.Contains(content, templateActionOpen) {
+		return "", false
+	}
+	return strings.TrimSpace(string(content)), true
+}
+
 // templateActionOpen is text/template's default left delimiter, and the
 // only one render's template ever uses - nothing in this repo calls
 // ttext.New(...).Delims(...). A page containing no "{{" anywhere therefore
@@ -938,6 +1018,23 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 		var template *ttext.Template
 		if template, err = ttext.New("current").Parse(string(input)); err != nil {
 			return
+		}
+		// data.Page and data.FirstTitle are normally only populated after
+		// this very template executes (see the extractPageConfig/getTitle
+		// calls below), since both are derived from the page's own
+		// rendered, HTML5-parsed output - so a page body referencing
+		// {{.Page}}, {{.Title}}, or {{.FirstTitle}} always saw them empty,
+		// even though the identical expression works fine in the layout
+		// (which only runs once render has already finished, via
+		// Generate). Give the page body a best-effort preview of each,
+		// extracted straight from input's raw bytes before this Execute
+		// call runs. The canonical extractPageConfig/getTitle calls below
+		// still run unconditionally afterward and overwrite both with the
+		// real value, so the layout's own view is completely unaffected by
+		// whatever preview the page body saw.
+		data.Page = earlyPageConfig(input)
+		if title, ok := leadingH1Text(input); ok {
+			data.FirstTitle = title
 		}
 		// Pass a pointer: text/template only sees pointer-receiver methods
 		// (Title, E, URL, ...) on an addressable value, and a plain "data" here

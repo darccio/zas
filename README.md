@@ -160,14 +160,15 @@ All .md files will be converted to HTML and copied in `.zas/deploy` using `.zas/
 
 Fenced and indented code blocks are rendered as `<pre><code>`, with a fence's info string (e.g. ` ```go `) becoming a `class="language-go"` on the `<code>` element. There is no syntax highlighting built in; style or highlight that class yourself if you want one.
 
-Keep in mind that any file will be treated as a Go text template before any further processing, **including the contents of code blocks**: `{{...}}` inside a fenced or indented block is executed as a template, not shown literally. To display literal double braces, write `{{"{{"}}`. You have access to these fields and methods from anywhere:
+Keep in mind that any file will be treated as a Go text template before any further processing, **including the contents of code blocks**: `{{...}}` inside a fenced or indented block is executed as a template, not shown literally. To display literal double braces, write `{{"{{"}}`. You have access to these fields and methods from anywhere - a page's own content and `layout.html` alike - though `{{.Body}}`, `{{.Title}}`, `{{.Page}}`, and `{{.FirstTitle}}` behave slightly differently depending on which one you use them from; see each below.
 
-* `{{.Body}}`: the file itself in HTML.
-* `{{.Title}}`: autodetected title (first H1 header in file), overridden by `title` property in page's config.
+* `{{.Body}}`: the file's own rendered content in HTML. This is only ever set once the page's own template has finished executing, so it's `layout.html` that receives it - used from inside a page's own content, `{{.Body}}` always evaluates empty, since a page can't contain a preview of its own not-yet-finished render.
+* `{{.Title}}`: autodetected title (first H1 header in file, see `{{.FirstTitle}}` below), overridden by `title` property in page's config (see `{{.Page}}` below). Used from inside a page's own content, this reads a best-effort preview of the same value, extracted from the page's own raw source ahead of its own templating; that preview is occasionally unavailable (falling back to empty, never to unexecuted `{{...}}` syntax) in edge cases `layout.html` doesn't have to worry about, since `layout.html` always sees the final, authoritative value instead.
 * `{{.Path}}`: file's path (also valid as URL).
 * `{{.Site.BaseURL}}`: URL where this site will be deployed, e.g. http://example.com (without final slash).
 * `{{.Site.Image}}`: URL to main image. Useful for Open Graph and Twitter meta tags.
-* `{{.Page}}`: YAML map from first HTML comment (in Markdown and HTML files). It is optional.
+* `{{.Page}}`: YAML map from first HTML comment (in Markdown and HTML files). It is optional. Used from inside a page's own content, this is likewise a best-effort preview parsed from that same leading comment ahead of the page's own templating; `layout.html` always sees the authoritative value, parsed later from the fully rendered page.
+* `{{.FirstTitle}}`: the file's first H1 header text, before any `title` override is applied - what `{{.Title}}` falls back to. Same best-effort preview behavior as `{{.Page}}` when used from inside a page's own content, with one more guard: if the H1 itself is written as `<h1>{{.Title}}</h1>`, the preview is deliberately left unavailable there instead of echoing the literal, unexecuted `{{.Title}}` text back into itself.
 * `{{.Directory}}`: YAML map from above (up to project's directory) or current directory's `.zas.yml` file. It is optional.
 * `{{.URL}}`: full URL for this file.
 * `{{.Extra /path/}}`: direct access to map holding `.zas/config.yml` as it is. You can access to any value with its full path. E.g. BaseURL is also available as `/site/baseurl`.

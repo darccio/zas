@@ -31,10 +31,34 @@ import (
 // ZasData is the context data store used in templates.
 type ZasData struct {
 	// Template used as body from current file.
+	//
+	// Body is only ever populated after this page's own template has
+	// finished executing - render derives it from that very execution's
+	// HTML5-parsed output (see render in generate.go) - so {{.Body}}
+	// always evaluates empty when used from inside the page's own body
+	// content, unlike in the layout template, which only runs later, once
+	// Body is already populated (see Generate in generate.go). This is an
+	// inherent limitation, not a bug: giving a page's own body a preview
+	// of its own final rendered self would need a multi-pass rendering
+	// model. Contrast with Page and FirstTitle below, which render does
+	// give the page's own body a best-effort preview of, extracted from
+	// the page's raw source ahead of its own template execution (see
+	// earlyPageConfig and leadingH1Text in generate.go) precisely because
+	// neither is circularly defined in terms of that same execution.
 	Body thtml.HTML
 	// Current path (usable in URLs).
 	Path string
 	// Title from first level header (H1).
+	//
+	// Inside the page's own body content (as opposed to the layout),
+	// FirstTitle holds a best-effort preview extracted from the page's raw
+	// source before its own template executes - see leadingH1Text in
+	// generate.go - rather than the canonical value render later derives
+	// from the fully rendered, HTML5-parsed document. The two normally
+	// agree; the preview is left unset only when no leading <h1> is found,
+	// or when one is found but its content still contains unexecuted
+	// template syntax ("{{"), to avoid exposing placeholder text as if it
+	// were a real title.
 	FirstTitle string
 	// Site configuration, as found in ZAS_CONF_FILE.
 	Site ZasSiteData

@@ -22,6 +22,7 @@ import (
 	thtml "html/template"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -277,5 +278,124 @@ func TestGenerateRawPageSkipsTemplating(t *testing.T) {
 	index := readDeploy(t, "index.html")
 	if !strings.Contains(index, "<title>Home</title>") {
 		t.Fatalf("index.html = %q, want %q (unrelated page still templated normally)", index, "<title>Home</title>")
+	}
+}
+
+// earlyPageConfig and leadingH1Text are the raw, pre-execution
+// counterparts render uses to give a page's own body a best-effort preview
+// of {{.Page}}/{{.Title}} and {{.FirstTitle}}, mirroring
+// leadingConfigComment's approach for the "template: false" opt-out above.
+// Both are covered directly here, then through render() and the H1
+// circularity guard in page_data_test.go.
+
+func TestEarlyPageConfig(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  map[interface{}]interface{}
+	}{
+		{
+			name:  "no comment at all",
+			input: "<h1>Hi</h1>",
+			want:  nil,
+		},
+		{
+			name:  "simple title key",
+			input: "<!-- title: Hi -->\n<h1>Hi</h1>",
+			want:  map[interface{}]interface{}{"title": "Hi"},
+		},
+		{
+			name:  "multiple keys",
+			input: "<!--\ntitle: Hi\nlanguage: en\n-->\n<h1>Hi</h1>",
+			want:  map[interface{}]interface{}{"title": "Hi", "language": "en"},
+		},
+		{
+			name:  "found past a leading doctype",
+			input: "<!DOCTYPE html>\n<!-- title: Hi -->\n<h1>Hi</h1>",
+			want:  map[interface{}]interface{}{"title": "Hi"},
+		},
+		{
+			name:  "malformed YAML comment yields nil, not an error",
+			input: "<!-- language: ru\n\tbad: true\n-->\n<h1>Hi</h1>",
+			want:  nil,
+		},
+		{
+			name:  "comment later in the document doesn't count",
+			input: "<h1>Hi</h1>\n<!-- title: Hi -->",
+			want:  nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := earlyPageConfig([]byte(tt.input))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("earlyPageConfig(%q) = %#v, want %#v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLeadingH1Text(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantText  string
+		wantFound bool
+	}{
+		{
+			name:      "no h1 at all",
+			input:     "<p>Hi</p>",
+			wantFound: false,
+		},
+		{
+			name:      "simple h1",
+			input:     "<h1>Hello</h1>",
+			wantText:  "Hello",
+			wantFound: true,
+		},
+		{
+			name:      "h1 with attributes",
+			input:     `<h1 class="title" id="top">Hello</h1>`,
+			wantText:  "Hello",
+			wantFound: true,
+		},
+		{
+			name:      "only the first h1 counts",
+			input:     "<h1>First</h1><h1>Second</h1>",
+			wantText:  "First",
+			wantFound: true,
+		},
+		{
+			name:      "surrounding whitespace is trimmed",
+			input:     "<h1>\n  Hello  \n</h1>",
+			wantText:  "Hello",
+			wantFound: true,
+		},
+		{
+			name:      "self-referential title is refused",
+			input:     "<h1>{{.Title}}</h1>",
+			wantFound: false,
+		},
+		{
+			name:      "self-referential FirstTitle is refused",
+			input:     "<h1>{{.FirstTitle}}</h1>",
+			wantFound: false,
+		},
+		{
+			name:      "a template action alongside real text is still refused",
+			input:     "<h1>Welcome, {{.Path}}</h1>",
+			wantFound: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := leadingH1Text([]byte(tt.input))
+			if ok != tt.wantFound {
+				t.Fatalf("leadingH1Text(%q) ok = %v, want %v", tt.input, ok, tt.wantFound)
+			}
+			if ok && got != tt.wantText {
+				t.Errorf("leadingH1Text(%q) = %q, want %q", tt.input, got, tt.wantText)
+			}
+		})
 	}
 }
