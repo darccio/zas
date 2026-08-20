@@ -40,6 +40,7 @@ import (
 	"github.com/melvinmt/gt"
 	markdown "github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
 	html5 "golang.org/x/net/html"
@@ -97,9 +98,20 @@ func (r *rawHTMLRenderer) renderRawHTML(w util.BufWriter, source []byte, node as
 // directly in a .md file would otherwise never reach Zas. Built once at
 // package init and shared across renderAsync goroutines: goldmark builds a
 // fresh parse context per Convert call, so this is safe for concurrent use.
-var markdownConverter = markdown.New(markdown.WithRendererOptions(
-	renderer.WithNodeRenderers(util.Prioritized(&rawHTMLRenderer{}, 100)),
-))
+//
+// extension.GFM (tables, strikethrough, task lists, autolinks) and
+// extension.Footnote are enabled on top of goldmark's default CommonMark
+// parsing - previously neither was, so e.g. a GFM table rendered as a
+// literal paragraph of pipe characters instead of a <table>. Both are
+// purely additive: they recognize syntax CommonMark alone leaves as plain
+// text, so existing content that doesn't use any of it renders exactly as
+// before.
+var markdownConverter = markdown.New(
+	markdown.WithExtensions(extension.GFM, extension.Footnote),
+	markdown.WithRendererOptions(
+		renderer.WithNodeRenderers(util.Prioritized(&rawHTMLRenderer{}, 100)),
+	),
+)
 
 // Generator groups relevant rendering info.
 type Generator struct {

@@ -108,3 +108,55 @@ func TestMarkdownIndentedCodeBlockRenders(t *testing.T) {
 		t.Fatalf("output = %q, want an indented code block wrapped in <pre><code>", out)
 	}
 }
+
+// markdownConverter enables extension.GFM (tables, strikethrough, task
+// lists, autolinks) and extension.Footnote on top of goldmark's default
+// CommonMark parsing. Previously neither was enabled, so this syntax
+// rendered as plain, unprocessed text - most visibly a GFM table showing
+// up as a literal paragraph of pipe characters instead of a <table>.
+
+func TestMarkdownRendersGFMTable(t *testing.T) {
+	out := convertMarkdown(t, "| A | B |\n|---|---|\n| 1 | 2 |\n")
+	for _, want := range []string{"<table>", "<th>A</th>", "<th>B</th>", "<td>1</td>", "<td>2</td>"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output = %q, want it to contain %q", out, want)
+		}
+	}
+	if strings.Contains(out, "| A | B |") {
+		t.Fatalf("output = %q, table syntax was left as literal text", out)
+	}
+}
+
+func TestMarkdownRendersStrikethrough(t *testing.T) {
+	out := convertMarkdown(t, "~~struck~~\n")
+	if !strings.Contains(out, "<del>struck</del>") {
+		t.Fatalf("output = %q, want strikethrough syntax rendered as <del>", out)
+	}
+}
+
+func TestMarkdownRendersTaskList(t *testing.T) {
+	out := convertMarkdown(t, "- [ ] todo\n- [x] done\n")
+	if !strings.Contains(out, `<input disabled="" type="checkbox">`) {
+		t.Fatalf("output = %q, want an unchecked task list checkbox", out)
+	}
+	if !strings.Contains(out, `<input checked="" disabled="" type="checkbox">`) {
+		t.Fatalf("output = %q, want a checked task list checkbox", out)
+	}
+}
+
+func TestMarkdownRendersAutolink(t *testing.T) {
+	out := convertMarkdown(t, "See http://example.com for more.\n")
+	if !strings.Contains(out, `<a href="http://example.com">http://example.com</a>`) {
+		t.Fatalf("output = %q, want the bare URL linkified", out)
+	}
+}
+
+func TestMarkdownRendersFootnote(t *testing.T) {
+	out := convertMarkdown(t, "Body text.[^1]\n\n[^1]: The footnote.\n")
+	if !strings.Contains(out, "The footnote.") {
+		t.Fatalf("output = %q, want the footnote definition rendered", out)
+	}
+	if !strings.Contains(out, `href="#fn:1"`) || !strings.Contains(out, `id="fn:1"`) {
+		t.Fatalf("output = %q, want a footnote reference link and its matching definition anchor", out)
+	}
+}
