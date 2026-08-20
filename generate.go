@@ -51,7 +51,6 @@ import (
 
 var helpers = thtml.FuncMap{
 	"noescape": noescape,
-	"eq":       eq,
 }
 
 // rawHTMLRenderer overrides only goldmark's raw-HTML node kinds (block and
@@ -1294,8 +1293,4 @@ func (gen *Generator) resolveMIMETypePlugin(typ string) string {
 
 func noescape(data string) thtml.HTML {
 	return thtml.HTML(data)
-}
-
-func eq(a, b interface{}) bool {
-	return a == b
 }
