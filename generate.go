@@ -177,13 +177,18 @@ func renderConcurrency() int {
 	return runtime.GOMAXPROCS(0) * 4
 }
 
-// printLine writes args to stdout like fmt.Println, but serialized
+// printLine writes args to stderr like fmt.Println, but serialized
 // against every other printLine call so concurrent renderAsync
-// goroutines (and walk itself) never interleave mid-line.
+// goroutines (and walk itself) never interleave mid-line. Every message
+// printLine carries - progress lines, symlink-skip notices, per-page
+// diagnostics - is either gated behind -verbose or reports a problem, not
+// data the tool produces; stderr keeps stdout free for a future
+// machine-consumable output format and matches the top-level fatal error
+// (cmd/zas/main.go) already going there.
 func (gen *Generator) printLine(args ...interface{}) {
 	gen.printMu.Lock()
 	defer gen.printMu.Unlock()
-	fmt.Println(args...)
+	fmt.Fprintln(os.Stderr, args...)
 }
 
 /*
@@ -547,7 +552,7 @@ func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error)
 		}
 		if reap {
 			if gen.Verbose {
-				fmt.Println("-", sourcePath)
+				gen.printLine("-", sourcePath)
 			}
 			if rmErr := os.RemoveAll(path); rmErr != nil {
 				gen.recordErr(rmErr)
