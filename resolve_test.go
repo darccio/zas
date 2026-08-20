@@ -6,7 +6,7 @@ import (
 	"github.com/melvinmt/gt"
 )
 
-// B3: Resolve must error on a present-but-non-string value instead of
+// Resolve must error on a present-but-non-string value instead of
 // panicking on the `.(string)` assertion, while still falling back to ""
 // when the key is genuinely absent.
 

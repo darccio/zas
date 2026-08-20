@@ -8,7 +8,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// B6: config data must not be able to pick an arbitrary Generator method via
+// config data must not be able to pick an arbitrary Generator method via
 // reflection and panic method.Call with a mismatched arity/signature.
 
 func TestIsEmbedPluginMethod(t *testing.T) {

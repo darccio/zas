@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// B4: NewI18n must not panic on an entry with no translations, and must
+// NewI18n must not panic on an entry with no translations, and must
 // check the yaml.Unmarshal error before the backfill loop runs.
 
 func TestNewI18nNoFile(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// C1: cachedZasDirectoryConfigs is read and written by every renderAsync
+// cachedZasDirectoryConfigs is read and written by every renderAsync
 // goroutine; run this under `go test -race` to prove there's no longer a
 // concurrent map read/write.
 func TestLoadZasDirectoryConfigConcurrent(t *testing.T) {
