@@ -187,6 +187,10 @@ show them off, so it opts out of being templated itself.
 
 The file is still fully parsed and processed otherwise (HTML5 parsing, `<embed>`, and its own config comment - `title` above still works), only its content is never run through `text/template`. Defaults to `true` (templated), so existing files are unaffected.
 
+There is also a page config property that isn't exposed as a template field, since it steers generation itself rather than the page's content:
+
+* `publish`: set to `false` in a file's config comment to keep that file out of `.zas/deploy` as a standalone page, while it stays fully available to be pulled into another page via `<embed>`. Defaults to `true` (published), so existing files are unaffected.
+
 ### What about layout.html?
 
 It is plain HTML. No frills. Just add a placeholder `{{.Body}}` in your template.
@@ -209,6 +213,16 @@ No problem! Just use our old friend `<embed>`. Imagine `<layout>` is a valid tag
 ```
 
 What does it mean? It means you can have .html files with embedded markdown files. Or anything else supported by Zas.
+
+`navigation.md` here probably isn't meant to be its own page, only content embedded into others - so mark it with `publish: false` in its own config comment:
+
+```markdown
+<!-- publish: false -->
+* [Home](/)
+* [About](/about.html)
+```
+
+Zas still reads and processes `navigation.md` normally wherever it's embedded, but it won't also show up on its own at `/navigation.html` in the deploy output.
 
 ## 你会说普通话?
 
