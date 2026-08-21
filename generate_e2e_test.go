@@ -54,6 +54,38 @@ func TestGenerateConvertsMarkdown(t *testing.T) {
 	}
 }
 
+// renderAsync's dispatch switch used to match ".md"/".html" case-
+// sensitively, so an uppercase-extension source like PAGE.MD fell through
+// to the copy branch and shipped into deploy verbatim (unrendered),
+// keeping its original PAGE.MD name instead of being converted and
+// deployed as PAGE.html.
+//
+// generate(t) here exercises the full pipeline in one call, including the
+// reap phase - which matters, because fixing only the dispatch switch
+// uncovered a second bug: reaper reconstructs a candidate source path from
+// a deploy path via swapExtension, which always normalizes the guessed
+// extension's casing, so its guess for PAGE.html's source was "page.md",
+// not "PAGE.MD". A plain os.Open on that lowercase guess never finds the
+// real, differently-cased source, so reaper wrongly treated PAGE.html as
+// stale and deleted it immediately after render() created it. PAGE.html
+// still being present after generate(t) returns is proof reaper's own
+// existence check (existsFold) is now case-insensitive too, not just the
+// render dispatch.
+func TestGenerateRendersUppercaseMarkdownExtension(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.WriteFile("PAGE.MD", []byte("# Upper\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := generate(t); err != nil {
+		t.Fatalf("generate() error = %v, want nil", err)
+	}
+	assertDeployHas(t, "PAGE.html")
+	assertDeployMissing(t, "PAGE.MD")
+	if out := readDeploy(t, "PAGE.html"); !strings.Contains(out, "<h1>Upper</h1>") {
+		t.Fatalf("PAGE.html = %q, want it converted from Markdown, not copied verbatim", out)
+	}
+}
+
 func TestGenerateResolvesHTMLEmbed(t *testing.T) {
 	newTestSite(t, "site")
 	if err := generate(t); err != nil {
