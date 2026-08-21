@@ -34,6 +34,32 @@ func TestZasDataPointerMethodsNeedAddressableValue(t *testing.T) {
 	}
 }
 
+// NewZasData builds data.Path from filepath.Walk's own path argument,
+// which uses the OS's native separator - "/" on Unix, "\" on Windows. Since
+// data.Path becomes a URL, not a filesystem path, it must always use "/"
+// regardless of platform: a nested page's URL containing a literal
+// backslash would be wrong, and IsHome's own hardcoded "/"-separated
+// comparisons further down would never match a language-prefixed home
+// page's path if it had backslashes in it instead.
+//
+// filepath.ToSlash is a documented no-op wherever the OS separator is
+// already "/" - true for every platform this test suite actually runs on
+// - so this only pins that ordinary Unix-style input is unaffected; the
+// backslash-to-slash conversion itself only ever executes on a real
+// Windows build, which isn't something this repo's test suite can
+// exercise directly. GOOS=windows go build/vet at least confirm the
+// change compiles and type-checks for that target.
+func TestNewZasDataBuildsForwardSlashPath(t *testing.T) {
+	gen := &Generator{
+		Config: ConfigSection{},
+		I18n:   &gt.Build{Index: gt.Strings{}, Origin: "en"},
+	}
+	data := NewZasData(filepath.Join("sub", "page.html"), gen)
+	if want := "/sub/page.html"; data.Path != want {
+		t.Fatalf("NewZasData(...).Path = %q, want %q", data.Path, want)
+	}
+}
+
 func TestRenderPageBodyCanCallPointerReceiverMethod(t *testing.T) {
 	t.Chdir(t.TempDir())
 	if err := os.MkdirAll("deploy", 0o755); err != nil {
