@@ -47,11 +47,7 @@ var (
 		return i.Run()
 	})
 	cmdGenerate = zas.NewSubcommand("generate - render the site from source into the deploy directory", func() error {
-		g := zas.Generator{
-			Verbose: *verbose,
-			Full:    *full,
-		}
-		return g.Run()
+		return zas.NewGenerator(*verbose, *full).Run()
 	})
 	// cmdHelp and cmdVersion get their Run funcs wired up in init() below,
 	// rather than inline here: both printUsage and printVersion end up
