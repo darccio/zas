@@ -113,13 +113,29 @@ var markdownConverter = markdown.New(
 	),
 )
 
-// Generator groups relevant rendering info.
+// NewGenerator returns a Generator ready to Run with the given verbosity
+// and full-generation settings.
+func NewGenerator(verbose, full bool) *Generator {
+	return &Generator{
+		Verbose: verbose,
+		Full:    full,
+	}
+}
+
+// Generator groups relevant rendering info. Like sync.WaitGroup, which it
+// embeds, a Generator must not be copied after it has been constructed -
+// use NewGenerator, or a Generator{} literal, and refer to it thereafter
+// only by pointer.
 type Generator struct {
 	// Verbose output.
 	Verbose bool
 	// Full generation (non-incremental mode).
 	Full bool
-	// Config from ConfigFile.
+	// Config holds the site configuration. Run always overwrites it with
+	// the freshly loaded contents of ConfigFile, so setting it before
+	// calling Run has no effect on Run itself; it's only meaningful when
+	// calling Generator's other methods directly without going through
+	// Run.
 	Config ConfigSection
 	// Default layout from Config[Name]["layout"].
 	Layout *thtml.Template
