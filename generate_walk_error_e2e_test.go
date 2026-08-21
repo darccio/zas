@@ -148,7 +148,7 @@ func TestGenerateWalkErrorDrainsInFlightGoroutines(t *testing.T) {
 
 	// (b) no truncated/corrupt file survives in deploy: every file that
 	// exists must be a complete render, never a partial write.
-	deployRoot := filepath.Join(dir, ZAS_DIR, "deploy")
+	deployRoot := filepath.Join(dir, Dir, "deploy")
 	rendered := 0
 	walkErr := filepath.Walk(deployRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {

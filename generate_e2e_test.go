@@ -208,7 +208,7 @@ func TestGenerateExtensionLikeDirectoryNotCorrupted(t *testing.T) {
 }
 
 // TestGenerateDirNameEndingInZasDirNotExcluded is a regression test: a
-// source directory whose name merely ends in ZAS_DIR (".zas"), such as
+// source directory whose name merely ends in Dir (".zas"), such as
 // "docs.zas", used to be silently excluded from generation because the
 // walk's exclusion check matched the substring ".zas/" anywhere in the
 // path, not just the real ".zas" directory.

@@ -26,22 +26,23 @@ import (
 // mergo.Merge only recursively merges a nested map's own keys when dst
 // already has a real (even if empty) map value to merge into. If a whole
 // top-level section like "mimetypes" is absent from a user's config.yml
-// entirely, mergo used to fall back to assigning ZAS_DEFAULT_CONF's own
+// entirely, mergo used to fall back to assigning the built-in default's own
 // map object for that section directly, so mutating the returned config's
-// defaulted section (e.g. through GetSection) corrupted ZAS_DEFAULT_CONF
-// for every later NewConfig call in the process. NewConfig now pre-seeds
-// a fresh, empty map for every missing default section before merging, so
+// defaulted section (e.g. through GetSection) corrupted the built-in default
+// for every later NewConfig call in the process. NewConfig now pre-seeds a
+// fresh, empty map for every missing default section before merging, so
 // mergo's own recursive merge copies each value into a map nothing else
-// references - no separate deep-copy logic involved.
+// references - on top of that, DefaultConfig() itself now also hands back a
+// deep copy, so no separate deep-copy logic is needed here either way.
 
 func TestNewConfigDoesNotAliasDefaultSections(t *testing.T) {
 	t.Chdir(t.TempDir())
-	if err := os.MkdirAll(ZAS_DIR, 0o755); err != nil {
+	if err := os.MkdirAll(Dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	// No "mimetypes" section at all - the exact case that used to alias.
 	yaml := "zas:\n  layout: .zas/layout.html\n  deploy: .zas/deploy\nsite:\n  language: en\n"
-	if err := os.WriteFile(ZAS_CONF_FILE, []byte(yaml), 0o644); err != nil {
+	if err := os.WriteFile(ConfigFile, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -56,8 +57,8 @@ func TestNewConfigDoesNotAliasDefaultSections(t *testing.T) {
 	}
 	mimetypes["text/markdown"] = "corrupted"
 
-	if got := ZAS_DEFAULT_CONF.GetSection("mimetypes").GetString("text/markdown"); got != "markdown" {
-		t.Fatalf(`ZAS_DEFAULT_CONF["mimetypes"]["text/markdown"] = %q, want %q (mutating the returned config must not affect the global default)`, got, "markdown")
+	if got := DefaultConfig().GetSection("mimetypes").GetString("text/markdown"); got != "markdown" {
+		t.Fatalf(`DefaultConfig()["mimetypes"]["text/markdown"] = %q, want %q (mutating the returned config must not affect the global default)`, got, "markdown")
 	}
 
 	cfg2, err := NewConfig()
@@ -74,11 +75,11 @@ func TestNewConfigDoesNotAliasDefaultSections(t *testing.T) {
 // this pins that the fix doesn't disturb the already-correct case.
 func TestNewConfigMergesPartialSection(t *testing.T) {
 	t.Chdir(t.TempDir())
-	if err := os.MkdirAll(ZAS_DIR, 0o755); err != nil {
+	if err := os.MkdirAll(Dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	yaml := "zas:\n  layout: .zas/layout.html\n  deploy: .zas/deploy\nmimetypes:\n  text/markdown: custom\n"
-	if err := os.WriteFile(ZAS_CONF_FILE, []byte(yaml), 0o644); err != nil {
+	if err := os.WriteFile(ConfigFile, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

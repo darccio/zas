@@ -148,7 +148,7 @@ func TestGenerateZasYMLScopesInvalidationToItsSubtree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	zasYML := filepath.Join("sub", ZAS_DIR_CONF_FILE)
+	zasYML := filepath.Join("sub", DirConfigFile)
 	if err := os.WriteFile(zasYML, []byte("language: en\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

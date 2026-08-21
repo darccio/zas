@@ -119,9 +119,9 @@ type Generator struct {
 	Verbose bool
 	// Full generation (non-incremental mode).
 	Full bool
-	// Config from ZAS_CONF_FILE.
+	// Config from ConfigFile.
 	Config ConfigSection
-	// Default layout from Config[ZAS]["layout"].
+	// Default layout from Config[Name]["layout"].
 	Layout *thtml.Template
 	// i18n helper.
 	I18n *gt.Build
@@ -302,7 +302,7 @@ func (gen *Generator) existsFold(name string) bool {
 // one creating it and the other finding it already there, neither an
 // error.
 func (gen *Generator) atomicWriteFile(path string, write func(io.Writer) error) (err error) {
-	if err = os.MkdirAll(filepath.Dir(path), os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
+	if err = os.MkdirAll(filepath.Dir(path), DefaultDirPerm); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
@@ -320,9 +320,9 @@ func (gen *Generator) atomicWriteFile(path string, write func(io.Writer) error) 
 		return err
 	}
 	// os.CreateTemp always creates with mode 0600, regardless of
-	// ZAS_DEFAULT_FILE_PERM, so the final file's permissions must be set
+	// DefaultFilePerm, so the final file's permissions must be set
 	// explicitly before it replaces path.
-	if err = f.Chmod(os.FileMode(ZAS_DEFAULT_FILE_PERM)); err != nil {
+	if err = f.Chmod(DefaultFilePerm); err != nil {
 		_ = f.Close()
 		return err
 	}
@@ -393,7 +393,7 @@ func (gen *Generator) Run() error {
 		return err
 	}
 	gen.Config = cfg
-	if info, statErr := os.Stat(ZAS_CONF_FILE); statErr == nil {
+	if info, statErr := os.Stat(ConfigFile); statErr == nil {
 		gen.configModTime = info.ModTime()
 	}
 	gen.wg.Add(3)
@@ -455,7 +455,7 @@ func (gen *Generator) loadI18N() {
 		Index:  i18nStrings,
 		Origin: mainlang,
 	}
-	if info, statErr := os.Stat(ZAS_I18N_FILE); statErr == nil {
+	if info, statErr := os.Stat(I18nFile); statErr == nil {
 		gen.i18nModTime = info.ModTime()
 	}
 }
@@ -471,7 +471,7 @@ func (gen *Generator) handleDeployPath(full bool) {
 			return
 		}
 	}
-	if err := os.MkdirAll(deployPath, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
+	if err := os.MkdirAll(deployPath, DefaultDirPerm); err != nil {
 		gen.recordErr(err)
 	}
 }
@@ -492,7 +492,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	if err != nil {
 		return err
 	}
-	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || pathHasComponent(path, ZAS_DIR) ||
+	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || pathHasComponent(path, Dir) ||
 		path == gen.GetDeployPath() || path == gen.Config.GetZString("layout") {
 		if path != "." && info.IsDir() {
 			return filepath.SkipDir
@@ -701,7 +701,7 @@ func (gen *Generator) renderHTML(path string) (err error) {
 }
 
 // dirConfigEntry is a cached loadZasDirectoryConfig resolution: config is
-// nil when no ZAS_DIR_CONF_FILE exists anywhere in the queried directory's
+// nil when no DirConfigFile exists anywhere in the queried directory's
 // ancestry, and modTime is its zero value in that case too.
 type dirConfigEntry struct {
 	config  ConfigSection
@@ -709,12 +709,12 @@ type dirConfigEntry struct {
 }
 
 /*
- * Loads ZAS_DIR_CONF_FILE (as defined in constants.go) from current
+ * Loads DirConfigFile (as defined in constants.go) from current
  * directory or previously found ones, along with that file's own mtime.
  * It must be a YAML file.
  *
  * Every directory visited while resolving currentpath is cached, not just
- * the one where ZAS_DIR_CONF_FILE was actually found - including a miss
+ * the one where DirConfigFile was actually found - including a miss
  * that bottoms out at ".". Without that, a directory with no directory
  * config anywhere in its ancestry (the common case) would redo the whole
  * upward walk on every call instead of hitting the cache after the first.
@@ -727,7 +727,7 @@ func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigS
 		}
 		return entry.config, entry.modTime, nil
 	}
-	confPath := filepath.Join(path, ZAS_DIR_CONF_FILE)
+	confPath := filepath.Join(path, DirConfigFile)
 	data, err := os.ReadFile(confPath)
 	if err != nil {
 		// Maybe .zas.yml is in an upper directory (already cached or not),
@@ -1261,7 +1261,7 @@ func (gen *Generator) extractPageConfig(doc *goquery.Document) (config map[inter
 /*
  * Copies a file, preserving the source's permission bits (so an
  * executable asset stays executable in deploy - atomicWriteFile would
- * otherwise leave every copy at the fixed ZAS_DEFAULT_FILE_PERM).
+ * otherwise leave every copy at the fixed DefaultFilePerm).
  * Source mtimes are deliberately not preserved: sourceIsNewer's
  * incremental staleness check treats an equal source/deploy mtime as
  * stale (its ">=", not ">", is itself a deliberate safe-direction
@@ -1476,18 +1476,18 @@ func (gen *Generator) handleMIMETypePlugin(e *goquery.Selection) error {
 	if !pluginNameRe.MatchString(cmdname) {
 		return fmt.Errorf("no valid plugin configured for embed type %q (src %q)", typ, src)
 	}
-	cmd := exec.Command(fmt.Sprintf("m%s%s", ZAS_PREFIX, cmdname), src)
+	cmd := exec.Command(fmt.Sprintf("m%s%s", PluginPrefix, cmdname), src)
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return fmt.Errorf("plugin m%s%s failed for %q: %w", ZAS_PREFIX, cmdname, src, err)
+		return fmt.Errorf("plugin m%s%s failed for %q: %w", PluginPrefix, cmdname, src, err)
 	}
 	e.ReplaceWithHtml(string(out))
 	return nil
 }
 
 /*
- * Returns registered plugin (without ZAS_PREFIX) from config.
+ * Returns registered plugin (without PluginPrefix) from config.
  */
 func (gen *Generator) resolveMIMETypePlugin(typ string) string {
 	return gen.Config.GetSection("mimetypes").GetString(typ)

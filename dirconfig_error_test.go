@@ -41,14 +41,14 @@ func TestLoadZasDirectoryConfigMalformedYAMLSurfacesError(t *testing.T) {
 	if err := os.MkdirAll("sub", 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join("sub", ZAS_DIR_CONF_FILE), []byte(malformedDirConfig), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join("sub", DirConfigFile), []byte(malformedDirConfig), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	gen := &Generator{}
 	if _, _, err := gen.loadZasDirectoryConfig(filepath.Join("sub", "page.html")); err == nil {
 		t.Fatal("loadZasDirectoryConfig() with malformed .zas.yml: want error, got nil")
-	} else if wantPath := filepath.Join("sub", ZAS_DIR_CONF_FILE); !strings.Contains(err.Error(), wantPath) {
+	} else if wantPath := filepath.Join("sub", DirConfigFile); !strings.Contains(err.Error(), wantPath) {
 		t.Fatalf("error = %v, want it to mention the malformed file's path %q", err, wantPath)
 	}
 	if len(gen.errs) != 1 {
@@ -72,7 +72,7 @@ func TestLoadZasDirectoryConfigMalformedYAMLSurfacesError(t *testing.T) {
 // permanently losing sub/'s directory config for the rest of the run.
 func TestGenerateReportsMalformedDirectoryConfig(t *testing.T) {
 	newTestSite(t, "site")
-	if err := os.WriteFile(filepath.Join("sub", ZAS_DIR_CONF_FILE), []byte(malformedDirConfig), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join("sub", DirConfigFile), []byte(malformedDirConfig), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -80,7 +80,7 @@ func TestGenerateReportsMalformedDirectoryConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("generate() with a malformed sub/.zas.yml: want error, got nil")
 	}
-	if wantPath := filepath.Join("sub", ZAS_DIR_CONF_FILE); !strings.Contains(err.Error(), wantPath) {
+	if wantPath := filepath.Join("sub", DirConfigFile); !strings.Contains(err.Error(), wantPath) {
 		t.Fatalf("generate() error = %v, want it to mention %q", err, wantPath)
 	}
 

@@ -22,10 +22,10 @@ func TestNewI18nNoFile(t *testing.T) {
 func TestNewI18nNilMapEntry(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	if err := os.MkdirAll(ZAS_DIR, 0o755); err != nil {
+	if err := os.MkdirAll(Dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(ZAS_I18N_FILE, []byte("Some key:\n"), 0o644); err != nil {
+	if err := os.WriteFile(I18nFile, []byte("Some key:\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	i18n, err := NewI18n("en")
@@ -40,10 +40,10 @@ func TestNewI18nNilMapEntry(t *testing.T) {
 func TestNewI18nMalformedYAML(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	if err := os.MkdirAll(ZAS_DIR, 0o755); err != nil {
+	if err := os.MkdirAll(Dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(ZAS_I18N_FILE, []byte("not: valid: yaml: [\n"), 0o644); err != nil {
+	if err := os.WriteFile(I18nFile, []byte("not: valid: yaml: [\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := NewI18n("en"); err == nil {

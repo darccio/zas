@@ -27,7 +27,7 @@ func TestGenerateFullSite(t *testing.T) {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
 
-	index, err := os.ReadFile(filepath.Join(ZAS_DIR, "deploy", "index.html"))
+	index, err := os.ReadFile(filepath.Join(Dir, "deploy", "index.html"))
 	must(err)
 	got := string(index)
 	for _, want := range []string{"<div>", "Hello world!", "</div>", "Hello World"} {
@@ -44,7 +44,7 @@ func TestGenerateFullSite(t *testing.T) {
 		t.Fatalf("index.html has %d <body> tags, want 1: %q", n, got)
 	}
 
-	about, err := os.ReadFile(filepath.Join(ZAS_DIR, "deploy", "about.html"))
+	about, err := os.ReadFile(filepath.Join(Dir, "deploy", "about.html"))
 	must(err)
 	if want := "<title>Overridden</title>"; !strings.Contains(string(about), want) {
 		t.Fatalf("about.html = %q, want it to contain %q", about, want)

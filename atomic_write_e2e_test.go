@@ -44,8 +44,8 @@ func TestGenerateSurvivesStrayLeftoverTempFile(t *testing.T) {
 // atomicWriteFile's explicit Chmod didn't change anything observable about
 // the normal, uninterrupted path: a rendered page (through Generate) and a
 // copied asset (through copy) must both still end up at the deploy tree's
-// usual 0644, matching ZAS_DEFAULT_FILE_PERM, exactly as the old direct
-// os.OpenFile(..., ZAS_DEFAULT_FILE_PERM) calls produced.
+// usual 0644, matching DefaultFilePerm, exactly as the old direct
+// os.OpenFile(..., DefaultFilePerm) calls produced.
 func TestGenerateOutputHasDefaultPermissions(t *testing.T) {
 	newTestSite(t, "site")
 	if err := generate(t); err != nil {
@@ -57,8 +57,8 @@ func TestGenerateOutputHasDefaultPermissions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("stat(%q): %v", rel, err)
 		}
-		if perm := info.Mode().Perm(); perm != os.FileMode(ZAS_DEFAULT_FILE_PERM) {
-			t.Errorf("%s permissions = %o, want %o", rel, perm, ZAS_DEFAULT_FILE_PERM)
+		if perm := info.Mode().Perm(); perm != DefaultFilePerm {
+			t.Errorf("%s permissions = %o, want %o", rel, perm, DefaultFilePerm)
 		}
 	}
 }
@@ -131,7 +131,7 @@ func TestGenerateKillMidRunNeverLeavesPartialFinalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deployRoot := filepath.Join(dir, ZAS_DIR, "deploy")
+	deployRoot := filepath.Join(dir, Dir, "deploy")
 	deadline := time.Now().Add(30 * time.Second)
 	killed := false
 	for time.Now().Before(deadline) {
