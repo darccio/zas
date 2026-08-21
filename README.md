@@ -200,6 +200,8 @@ It is plain HTML. No frills. Just add a placeholder `{{.Body}}` in your template
 
 First header level 1 from Markdown files will be made available as `{{.Title}}`, unless it is overridden.
 
+`layout.html` is parsed with Go's `html/template`, which auto-escapes values by default. A `noescape` helper is available if you need to output a string as trusted, unescaped HTML - e.g. `{{noescape .SomeTrustedHTML}}`. Only use it on content you trust: passing it anything that could contain attacker-controlled input (a value from user-submitted content, an untrusted third-party feed, etc.) reintroduces the XSS risk `html/template` exists to prevent. If you don't need it, don't use it.
+
 ### But... I want to do pages beyond post-like format
 
 No problem! Just use our old friend `<embed>`. Imagine `<layout>` is a valid tag.
