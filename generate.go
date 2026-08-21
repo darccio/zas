@@ -43,11 +43,11 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
+	yaml "go.yaml.in/yaml/v3"
 	html5 "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-	yaml "gopkg.in/yaml.v2"
 )
 
 var helpers = thtml.FuncMap{
@@ -881,9 +881,9 @@ func hasFoldPrefix(b []byte, prefix string) bool {
 }
 
 // templateKey is the one map key pageOptsOutOfTemplating cares about.
-// bomUTF16LE/bomUTF16BE are the two byte-order marks yaml.v2 recognizes at
-// the very start of a stream - see mayDefineTemplateKey, the only place
-// either is used.
+// bomUTF16LE/bomUTF16BE are the two byte-order marks go.yaml.in/yaml
+// recognizes at the very start of a stream - see mayDefineTemplateKey, the
+// only place either is used.
 var templateKey = []byte("template")
 
 const (
@@ -894,19 +894,17 @@ const (
 // mayDefineTemplateKey reports whether content could possibly decode to a
 // YAML mapping containing the exact key "template", without actually
 // running the parser to find out. It exists to keep yaml.Unmarshal off the
-// hot path: gopkg.in/yaml.v2's yaml_parser_initialize allocates the
-// parser's two I/O buffers (512 and 1536 bytes) on every single Unmarshal
-// call regardless of input size, so asking an eleven-byte
-// "<!-- title: Hi -->" comment for a key it doesn't have costs ~4.5us and
-// ~5.5KB - once per page, on every render, across renderConcurrency()
-// goroutines.
+// hot path: a real Unmarshal call on go.yaml.in/yaml/v3 costs ~6.9us and
+// ~7.3KB/42 allocs regardless of input size, so asking an eleven-byte
+// "<!-- title: Hi -->" comment for a key it doesn't have would pay that -
+// once per page, on every render, across renderConcurrency() goroutines.
 //
 // A false positive here only costs the yaml parse that would have run
 // anyway, so the bar is one-sided: this must never say false for content
 // yaml would in fact decode with a "template" key. Every YAML 1.1
 // construct that can put a key into the map either reproduces that key's
 // bytes verbatim or needs one of the three markers checked below - verified
-// against gopkg.in/yaml.v2 v2.4.0's actual source, not just the spec:
+// against go.yaml.in/yaml/v3 v3.0.5's actual behavior, not just the spec:
 //
 //   - Plain and single-quoted scalars reproduce their bytes. A line break
 //     inside one folds to a space, so "temp\nlate" decodes as "temp late"
@@ -918,18 +916,15 @@ const (
 //   - A double-quoted scalar can synthesize the key ("\x74emplate", or a
 //     backslash-newline continuation joining "temp" and "late"), but every
 //     such form needs a backslash.
-//   - So can a tag: yaml.v2 base64-decodes !!binary into a Go string
-//     (decode.go's scalar case deliberately excludes yaml_BINARY_TAG from
-//     resolvableTag in resolve.go, so it skips normal resolution and hits
-//     the base64 branch instead), which makes
+//   - So can a tag: go.yaml.in/yaml decodes a !!binary-tagged scalar's
+//     base64 into a plain Go string during normal resolution, which makes
 //     "<!-- !!binary dGVtcGxhdGU=: false -->" - base64 of "template" - a
 //     real opt-out today that never spells the key in the comment. Every
 //     way to name that tag - the !! shorthand, a verbatim !<...>, or a
 //     %TAG-remapped handle - puts a '!' somewhere in the document, because
 //     a tag handle is delimited by them.
-//   - The bytes need not be UTF-8 at all. yaml.v2 sniffs a UTF-16 byte
-//     order mark and transcodes (readerc.go's
-//     yaml_parser_determine_encoding), so a comment body opening with
+//   - The bytes need not be UTF-8 at all. go.yaml.in/yaml sniffs a UTF-16
+//     byte order mark and transcodes it, so a comment body opening with
 //     FF FE spells the key as 74 00 65 00 ... instead of literal ASCII.
 //     That sniff happens once, at the very start of the stream and
 //     nowhere else, so a two-byte prefix check is exact rather than
