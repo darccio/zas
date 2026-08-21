@@ -43,6 +43,28 @@ func NewConfig() (ConfigSection, error) {
 	if err = yaml.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
+	if config == nil {
+		config = ConfigSection{}
+	}
+	// mergo.Merge only recursively merges a nested map's own keys when
+	// dst already has a real (even if empty) map value to merge into. If
+	// a whole top-level section like "mimetypes" is absent from config,
+	// mergo instead falls back to assigning ZAS_DEFAULT_CONF's own map
+	// object for that section directly - the two configs then share the
+	// exact same underlying map, so mutating one's defaulted section
+	// (e.g. through GetSection) corrupts ZAS_DEFAULT_CONF for every
+	// subsequent NewConfig call in the process. Giving every missing
+	// section a fresh, empty map first means mergo's own merge does the
+	// actual copying, one key at a time, into a map nothing else
+	// references - no separate deep-copy logic needed.
+	for key, value := range ZAS_DEFAULT_CONF {
+		if _, ok := value.(ConfigSection); !ok {
+			continue
+		}
+		if _, exists := config[key]; !exists {
+			config[key] = ConfigSection{}
+		}
+	}
 
 	if err = mergo.Merge(&config, ZAS_DEFAULT_CONF); err != nil {
 		return nil, err

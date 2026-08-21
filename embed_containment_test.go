@@ -136,7 +136,6 @@ func TestGenerateRejectsEmbedEscapingSiteRootViaAbsolutePath(t *testing.T) {
 	}
 	copyFixture(t, "site", root)
 	t.Chdir(root)
-	saveGlobals(t)
 
 	secret := filepath.Join(base, "secret.txt")
 	if err := os.WriteFile(secret, []byte("do not leak"), 0o644); err != nil {
@@ -161,7 +160,6 @@ func TestGenerateRejectsEmbedEscapingSiteRootViaTraversal(t *testing.T) {
 	}
 	copyFixture(t, "site", root)
 	t.Chdir(root)
-	saveGlobals(t)
 
 	if err := os.WriteFile(filepath.Join(base, "secret.txt"), []byte("do not leak"), 0o644); err != nil {
 		t.Fatal(err)

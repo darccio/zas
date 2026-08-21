@@ -13,15 +13,13 @@ import (
 // relative to the process's current directory, so every test here calls
 // t.Chdir and none of them can run under t.Parallel.
 
-// newTestSite copies testdata/<fixture> into a fresh temp directory, chdirs
-// into it, and snapshots ZAS_DEFAULT_CONF so a test that triggers the
-// mergo aliasing in NewConfig can't leak mutations into later tests.
+// newTestSite copies testdata/<fixture> into a fresh temp directory and
+// chdirs into it.
 func newTestSite(t *testing.T, fixture string) string {
 	t.Helper()
 	dir := t.TempDir()
 	copyFixture(t, fixture, dir)
 	t.Chdir(dir)
-	saveGlobals(t)
 	return dir
 }
 
@@ -35,32 +33,6 @@ func copyFixture(t *testing.T, fixture, dir string) {
 	if err := os.CopyFS(dir, os.DirFS(src)); err != nil {
 		t.Fatal(err)
 	}
-}
-
-// saveGlobals deep-copies ZAS_DEFAULT_CONF and restores it after the test,
-// undoing any mutation reachable through mergo's aliasing of nested config
-// sections in NewConfig.
-func saveGlobals(t *testing.T) {
-	t.Helper()
-	snapshot := deepCopyConfigSection(ZAS_DEFAULT_CONF)
-	t.Cleanup(func() {
-		ZAS_DEFAULT_CONF = snapshot
-	})
-}
-
-func deepCopyConfigSection(cs ConfigSection) ConfigSection {
-	if cs == nil {
-		return nil
-	}
-	out := make(ConfigSection, len(cs))
-	for k, v := range cs {
-		if nested, ok := v.(ConfigSection); ok {
-			out[k] = deepCopyConfigSection(nested)
-		} else {
-			out[k] = v
-		}
-	}
-	return out
 }
 
 // generate runs a full Generator.Run against the current directory.
