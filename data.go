@@ -23,6 +23,7 @@ import (
 	"fmt"
 	thtml "html/template"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/melvinmt/gt"
@@ -190,11 +191,17 @@ func (zd *ZasData) IsHome() (bool, error) {
 	return zd.Path == "/index.html" || zd.Path == fmt.Sprintf("/%s/index.html", lang), nil
 }
 
-// NewZasData builds a ZasData for the page at filepath.
-func NewZasData(filepath string, gen *Generator) (data ZasData) {
+// NewZasData builds a ZasData for the page at srcPath.
+func NewZasData(srcPath string, gen *Generator) (data ZasData) {
 	// Any path must finish in ".html".
-	filepath = swapExtension(filepath, ".md", ".html")
-	data.Path = "/" + filepath
+	srcPath = swapExtension(srcPath, ".md", ".html")
+	// filepath.Walk (the only caller) yields srcPath with the OS's own
+	// separator, but data.Path becomes a URL - which always uses forward
+	// slashes regardless of platform, so a nested page on Windows doesn't
+	// end up with a literal backslash in its URL (and, via IsHome's
+	// hardcoded "/"-separated comparisons below, so a language-prefixed
+	// home page can still be recognized as one there too).
+	data.Path = "/" + filepath.ToSlash(srcPath)
 	data.config = gen.Config
 	// Each ZasData gets its own gt.Build sharing the (read-only, post-init)
 	// Index, so per-render SetTarget/Translate calls don't race or bleed

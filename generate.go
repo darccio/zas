@@ -727,7 +727,7 @@ func (gen *Generator) loadZasDirectoryConfig(currentpath string) (config ConfigS
 		}
 		return entry.config, entry.modTime, nil
 	}
-	confPath := fmt.Sprintf("%s/%s", path, ZAS_DIR_CONF_FILE)
+	confPath := filepath.Join(path, ZAS_DIR_CONF_FILE)
 	data, err := os.ReadFile(confPath)
 	if err != nil {
 		// Maybe .zas.yml is in an upper directory (already cached or not),
