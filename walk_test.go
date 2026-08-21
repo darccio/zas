@@ -45,14 +45,14 @@ func TestWalkSkipsDeployDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join("public", ZAS_DIR, "deploy")
+	path := filepath.Join("public", Dir, "deploy")
 	if err := gen.walk(path, info, nil); !errors.Is(err, filepath.SkipDir) {
 		t.Fatalf("walk(%q) error = %v, want %v", path, err, filepath.SkipDir)
 	}
 }
 
 func TestWalkSkipsConfiguredDeployPathOutsideZasDir(t *testing.T) {
-	gen := &Generator{Config: ConfigSection{ZAS: ConfigSection{"deploy": "public"}}}
+	gen := &Generator{Config: ConfigSection{Name: ConfigSection{"deploy": "public"}}}
 	info, err := os.Stat(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +64,7 @@ func TestWalkSkipsConfiguredDeployPathOutsideZasDir(t *testing.T) {
 }
 
 func TestWalkSkipsConfiguredLayoutPathOutsideZasDir(t *testing.T) {
-	gen := &Generator{Config: ConfigSection{ZAS: ConfigSection{"layout": "mylayout.html"}}}
+	gen := &Generator{Config: ConfigSection{Name: ConfigSection{"layout": "mylayout.html"}}}
 	file := filepath.Join(t.TempDir(), "x")
 	if err := os.WriteFile(file, nil, 0o644); err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestWalkDoesNotSkipDirAtRoot(t *testing.T) {
 }
 
 // TestWalkDoesNotSkipDirEndingInZasDir is a regression test: a directory
-// whose name merely ends in ZAS_DIR (".zas"), such as "docs.zas", must not
+// whose name merely ends in Dir (".zas"), such as "docs.zas", must not
 // be treated as the real ".zas" directory.
 func TestWalkDoesNotSkipDirEndingInZasDir(t *testing.T) {
 	t.Chdir(t.TempDir())
@@ -159,13 +159,13 @@ func TestPathHasComponent(t *testing.T) {
 		component string
 		want      bool
 	}{
-		{ZAS_DIR, ZAS_DIR, true},
-		{filepath.Join("sect", ZAS_DIR), ZAS_DIR, true},
-		{filepath.Join(ZAS_DIR, "config.yml"), ZAS_DIR, true},
-		{"docs.zas", ZAS_DIR, false},
-		{filepath.Join("docs.zas", "page.md"), ZAS_DIR, false},
-		{"myzasdir", ZAS_DIR, false},
-		{"foo.zaster", ZAS_DIR, false},
+		{Dir, Dir, true},
+		{filepath.Join("sect", Dir), Dir, true},
+		{filepath.Join(Dir, "config.yml"), Dir, true},
+		{"docs.zas", Dir, false},
+		{filepath.Join("docs.zas", "page.md"), Dir, false},
+		{"myzasdir", Dir, false},
+		{"foo.zaster", Dir, false},
 	}
 	for _, tt := range tests {
 		if got := pathHasComponent(tt.path, tt.component); got != tt.want {

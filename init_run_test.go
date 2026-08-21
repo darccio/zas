@@ -10,9 +10,9 @@ import (
 
 func TestInitRunWriteFailureReturnsError(t *testing.T) {
 	t.Chdir(t.TempDir())
-	// Make ZAS_DIR a regular file so os.WriteFile(ZAS_CONF_FILE, ...) - which
+	// Make Dir a regular file so os.WriteFile(ConfigFile, ...) - which
 	// treats it as a directory - fails deterministically.
-	if err := os.WriteFile(ZAS_DIR, []byte("not a directory"), 0o644); err != nil {
+	if err := os.WriteFile(Dir, []byte("not a directory"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	i := &Init{}
@@ -27,7 +27,7 @@ func TestInitRunOK(t *testing.T) {
 	if err := i.Run(); err != nil {
 		t.Fatalf("Init.Run() error = %v, want nil", err)
 	}
-	if _, err := os.Stat(filepath.Join(ZAS_DIR, "config.yml")); err != nil {
+	if _, err := os.Stat(filepath.Join(Dir, "config.yml")); err != nil {
 		t.Fatalf("config.yml not written: %v", err)
 	}
 }

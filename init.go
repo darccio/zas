@@ -37,7 +37,7 @@ type ConfigSection map[interface{}]interface{}
 // package's own map[interface{}]interface{} alias - without this,
 // GetSection's type switch would silently miss every subsection loaded
 // from a real YAML file, and mergo.Merge panics merging a decoded
-// map[string]interface{} against ZAS_DEFAULT_CONF's ConfigSection values.
+// map[string]interface{} against DefaultConfig's ConfigSection values.
 func (cs *ConfigSection) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var raw map[string]interface{}
 	if err := unmarshal(&raw); err != nil {
@@ -73,10 +73,10 @@ func normalizeConfigValue(value interface{}) interface{} {
 	}
 }
 
-// NewConfig loads ZAS_CONF_FILE (as defined in constants.go).
+// NewConfig loads ConfigFile (as defined in constants.go).
 // It must be a YAML file.
 func NewConfig() (ConfigSection, error) {
-	data, err := os.ReadFile(ZAS_CONF_FILE)
+	data, err := os.ReadFile(ConfigFile)
 	if err != nil {
 		return nil, err
 	}
@@ -91,15 +91,16 @@ func NewConfig() (ConfigSection, error) {
 	// mergo.Merge only recursively merges a nested map's own keys when
 	// dst already has a real (even if empty) map value to merge into. If
 	// a whole top-level section like "mimetypes" is absent from config,
-	// mergo instead falls back to assigning ZAS_DEFAULT_CONF's own map
-	// object for that section directly - the two configs then share the
-	// exact same underlying map, so mutating one's defaulted section
-	// (e.g. through GetSection) corrupts ZAS_DEFAULT_CONF for every
-	// subsequent NewConfig call in the process. Giving every missing
-	// section a fresh, empty map first means mergo's own merge does the
-	// actual copying, one key at a time, into a map nothing else
-	// references - no separate deep-copy logic needed.
-	for key, value := range ZAS_DEFAULT_CONF {
+	// mergo instead falls back to assigning defaults' own map object for
+	// that section directly - config and defaults would then share the
+	// exact same underlying map, so mutating config's defaulted section
+	// (e.g. through GetSection) would corrupt defaults, and any other
+	// holder of it, for as long as either is still referenced. Giving
+	// every missing section a fresh, empty map first means mergo's own
+	// merge does the actual copying, one key at a time, into a map
+	// nothing else references - no separate deep-copy logic needed.
+	defaults := DefaultConfig()
+	for key, value := range defaults {
 		if _, ok := value.(ConfigSection); !ok {
 			continue
 		}
@@ -108,17 +109,17 @@ func NewConfig() (ConfigSection, error) {
 		}
 	}
 
-	if err = mergo.Merge(&config, ZAS_DEFAULT_CONF); err != nil {
+	if err = mergo.Merge(&config, defaults); err != nil {
 		return nil, err
 	}
 
 	return config, nil
 }
 
-// NewI18n loads ZAS_I18N_FILE (as defined in constants.go).
+// NewI18n loads I18nFile (as defined in constants.go).
 // It must be a YAML file.
 func NewI18n(mainlang string) (i18n gt.Strings, err error) {
-	data, err := os.ReadFile(ZAS_I18N_FILE)
+	data, err := os.ReadFile(I18nFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return make(gt.Strings), nil
@@ -161,7 +162,7 @@ func (cs ConfigSection) GetSection(key string) (value ConfigSection) {
 
 // GetZString returns a string value from default Zas section.
 func (cs ConfigSection) GetZString(key string) string {
-	s := cs.GetSection(ZAS)
+	s := cs.GetSection(Name)
 	return s.GetString(key)
 }
 
@@ -169,26 +170,26 @@ func (cs ConfigSection) GetZString(key string) string {
 // repository in the current directory.
 type Init struct{}
 
-// Run scaffolds ZAS_DIR and writes a default ZAS_CONF_FILE, overwriting
+// Run scaffolds Dir and writes a default ConfigFile, overwriting
 // any existing one.
 func (i *Init) Run() error {
-	path, err := filepath.Abs(ZAS_DIR)
+	path, err := filepath.Abs(Dir)
 	if err != nil {
 		return err
 	}
-	if _, statErr := os.Stat(ZAS_DIR); os.IsNotExist(statErr) {
-		if err := os.Mkdir(ZAS_DIR, os.FileMode(ZAS_DEFAULT_DIR_PERM)); err != nil {
+	if _, statErr := os.Stat(Dir); os.IsNotExist(statErr) {
+		if err := os.Mkdir(Dir, DefaultDirPerm); err != nil {
 			return err
 		}
-		fmt.Printf("Initialized empty %s repository in %s\n", ZAS_NAME, path)
+		fmt.Printf("Initialized empty %s repository in %s\n", DisplayName, path)
 	} else {
-		fmt.Printf("Reinitialized existing %s repository in %s\n", ZAS_NAME, path)
+		fmt.Printf("Reinitialized existing %s repository in %s\n", DisplayName, path)
 	}
-	// Stores ZAS_DEFAULT_CONF as ZAS_CONF_FILE (as defined in
+	// Stores DefaultConfig() as ConfigFile (as defined in
 	// constants.go). Overwrites every time we invoke the init subcommand.
-	data, err := yaml.Marshal(&ZAS_DEFAULT_CONF)
+	data, err := yaml.Marshal(DefaultConfig())
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(ZAS_CONF_FILE, data, os.FileMode(ZAS_DEFAULT_FILE_PERM))
+	return os.WriteFile(ConfigFile, data, DefaultFilePerm)
 }

@@ -20,12 +20,6 @@ linters:
     - usestdlibvars
   exclusions:
     rules:
-      # ZAS_* are exported mutable vars forming the library's public API
-      # since the cmd/library split; renaming to CamelCase is a breaking
-      # change out of scope for a lint cleanup.
-      - path: constants.go
-        linters: [revive]
-        text: "don't use ALL_CAPS"
       # generate.go dispatches embeds via
       # reflect.MethodByName(cases.Title(...).String(plugin)), so the
       # "html" mimetype must resolve to the literal method name Html.

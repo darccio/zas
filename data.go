@@ -61,13 +61,13 @@ type ZasData struct {
 	// template syntax ("{{"), to avoid exposing placeholder text as if it
 	// were a real title.
 	FirstTitle string
-	// Site configuration, as found in ZAS_CONF_FILE.
+	// Site configuration, as found in ConfigFile.
 	Site ZasSiteData
 	// In-page configuration, from first HTML comment (expected as YAML map).
 	Page map[interface{}]interface{}
-	// Current directory configuration, from ZAS_DIR_CONF_FILE.
+	// Current directory configuration, from DirConfigFile.
 	Directory ConfigSection
-	// Config loaded from ZAS_CONF_FILE.
+	// Config loaded from ConfigFile.
 	config ConfigSection
 	// i18n helper
 	i18n *gt.Build

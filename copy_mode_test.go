@@ -25,7 +25,7 @@ import (
 )
 
 // copy used to open its destination through atomicWriteFile, which always
-// applies the fixed ZAS_DEFAULT_FILE_PERM (0644) regardless of the
+// applies the fixed DefaultFilePerm (0644) regardless of the
 // source's own mode - so an executable asset (a script, a binary) lost its
 // +x bit on every deploy.
 
@@ -76,12 +76,12 @@ func TestCopyPreservesNonExecutableMode(t *testing.T) {
 	}
 	// A regression check for the fix itself, not just the executable case:
 	// the deployed mode should track the source's own mode (0640) rather
-	// than always landing on the fixed ZAS_DEFAULT_FILE_PERM (0644) that
+	// than always landing on the fixed DefaultFilePerm (0644) that
 	// atomicWriteFile applies before copy's chmod runs.
 	if got, want := info.Mode().Perm(), os.FileMode(0o640); got != want {
 		t.Fatalf("deployed file mode = %o, want %o (source's own mode preserved, not the fixed default)", got, want)
 	}
 	if got := os.FileMode(0o644); got == info.Mode().Perm() {
-		t.Fatalf("deployed file mode = %o, want it to differ from the fixed ZAS_DEFAULT_FILE_PERM default, proving the source's own mode was actually applied", got)
+		t.Fatalf("deployed file mode = %o, want it to differ from the fixed DefaultFilePerm default, proving the source's own mode was actually applied", got)
 	}
 }

@@ -20,8 +20,8 @@ func TestLoadZasDirectoryConfigConcurrent(t *testing.T) {
 	}
 	must(os.MkdirAll("a/sub", 0o755))
 	must(os.MkdirAll("b", 0o755))
-	must(os.WriteFile("a/"+ZAS_DIR_CONF_FILE, []byte("lang: a\n"), 0o644))
-	must(os.WriteFile("b/"+ZAS_DIR_CONF_FILE, []byte("lang: b\n"), 0o644))
+	must(os.WriteFile("a/"+DirConfigFile, []byte("lang: a\n"), 0o644))
+	must(os.WriteFile("b/"+DirConfigFile, []byte("lang: b\n"), 0o644))
 
 	gen := &Generator{}
 	// a/sub has no .zas.yml of its own, so it must recurse up to a/'s config.

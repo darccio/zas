@@ -96,8 +96,8 @@ func TestAtomicWriteFileSuccessSetsDefaultPermissionsAndContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if perm := info.Mode().Perm(); perm != os.FileMode(ZAS_DEFAULT_FILE_PERM) {
-		t.Fatalf("permissions = %o, want %o", perm, ZAS_DEFAULT_FILE_PERM)
+	if perm := info.Mode().Perm(); perm != DefaultFilePerm {
+		t.Fatalf("permissions = %o, want %o", perm, DefaultFilePerm)
 	}
 	got, err := os.ReadFile(path)
 	if err != nil {

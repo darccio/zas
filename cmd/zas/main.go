@@ -140,7 +140,7 @@ func run(args []string) int {
 }
 
 func runPlugin(args []string) int {
-	cmd := exec.Command(fmt.Sprintf("%s%s", zas.ZAS_PREFIX, args[0]), args[1:]...)
+	cmd := exec.Command(fmt.Sprintf("%s%s", zas.PluginPrefix, args[0]), args[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -166,15 +166,15 @@ func runPlugin(args []string) int {
 // printUsage writes the top-level help text: what zas is, how to invoke it,
 // and the list of internal subcommands with their one-line usage.
 func printUsage(w io.Writer) {
-	_, _ = fmt.Fprintf(w, "%s is a static site generator.\n\n", zas.ZAS_NAME)
-	_, _ = fmt.Fprintf(w, "Usage:\n\n\t%s <command> [arguments]\n\n", zas.ZAS)
+	_, _ = fmt.Fprintf(w, "%s is a static site generator.\n\n", zas.DisplayName)
+	_, _ = fmt.Fprintf(w, "Usage:\n\n\t%s <command> [arguments]\n\n", zas.Name)
 	_, _ = fmt.Fprintln(w, "The commands are:")
 	_, _ = fmt.Fprintln(w)
 	for _, cmd := range subcommands {
 		_, _ = fmt.Fprintf(w, "\t%s\n", cmd.UsageLine)
 	}
 	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "Run \"%s <command> -h\" for a command's own flags, or \"%s version\" for version information.\n", zas.ZAS, zas.ZAS)
+	_, _ = fmt.Fprintf(w, "Run \"%s <command> -h\" for a command's own flags, or \"%s version\" for version information.\n", zas.Name, zas.Name)
 }
 
 // printVersion writes a best-effort version string for the zas binary,
@@ -186,7 +186,7 @@ func printUsage(w io.Writer) {
 func printVersion(w io.Writer) {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		_, _ = fmt.Fprintf(w, "%s version unknown (no build info available)\n", zas.ZAS)
+		_, _ = fmt.Fprintf(w, "%s version unknown (no build info available)\n", zas.Name)
 		return
 	}
 
@@ -206,7 +206,7 @@ func printVersion(w io.Writer) {
 		}
 	}
 
-	_, _ = fmt.Fprintf(w, "%s version %s", zas.ZAS, version)
+	_, _ = fmt.Fprintf(w, "%s version %s", zas.Name, version)
 	if revision != "" {
 		if len(revision) > 12 {
 			revision = revision[:12]
