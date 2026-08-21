@@ -14,7 +14,7 @@ Yes, it is another NIH, but... I think Zas is a different kind of beast. I admit
 
 1. Gophers. Yes, there is [Hugo](http://gohugo.io/) (kudos!) but... Who wants to learn another directory layout? There is also [Hastie](https://github.com/mkaz/hastie) and [lots of other static site generators](https://jamstack.org/generators/).
 2. Pure Markdown. And HTML, if you want.
-3. Just a loop. Zas loops over all .md and .html files in the current directory (and subdirectories), ignoring other files (including dot-files).
+3. Just a loop. Zas loops over the current directory (and subdirectories), converting .md and .html files and copying everything else as-is - except dot-files and dot-directories, which are ignored entirely.
 4. Your imagination is your limit. Zas has a simple extension mechanism based on subcommands. Do you need to handle a blog with Zas? Install/create a new extension and do it!
 5. Unobtrusive structure, no `_` files. More in the [Usage section](#usage).
 
