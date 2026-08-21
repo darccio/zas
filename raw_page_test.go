@@ -30,8 +30,9 @@ import (
 )
 
 // utf16leBOM prepends a UTF-16LE byte-order mark and encodes s as
-// UTF-16LE, reproducing the shape yaml.v2 transcodes internally - see the
-// "utf-16le comment body still opts out" case below and mayDefineTemplateKey.
+// UTF-16LE, reproducing the shape go.yaml.in/yaml transcodes internally -
+// see the "utf-16le comment body still opts out" case below and
+// mayDefineTemplateKey.
 func utf16leBOM(s string) string {
 	out := []byte("\xff\xfe")
 	for _, r := range s {
@@ -102,11 +103,12 @@ func TestPageOptsOutOfTemplating(t *testing.T) {
 			want:  false,
 		},
 		// The remaining cases pin mayDefineTemplateKey's guards: each one
-		// is a real yaml.v2 construct that can decode to a "template" key
-		// without spelling the literal bytes "template" in the comment,
-		// found while proving the fast path can't just check for those
-		// bytes and a backslash. Deleting the '!' or BOM guard would make
-		// the "still opts out" cases below silently stop opting out.
+		// is a real go.yaml.in/yaml construct that can decode to a
+		// "template" key without spelling the literal bytes "template" in
+		// the comment, found while proving the fast path can't just check
+		// for those bytes and a backslash. Deleting the '!' or BOM guard
+		// would make the "still opts out" cases below silently stop
+		// opting out.
 		{
 			name:  "!!binary-tagged key still opts out",
 			input: "<!-- !!binary dGVtcGxhdGU=: false -->\n<h1>Hi</h1>",
