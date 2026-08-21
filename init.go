@@ -25,11 +25,53 @@ import (
 
 	"dario.cat/mergo"
 	"github.com/melvinmt/gt"
-	yaml "gopkg.in/yaml.v2"
+	yaml "go.yaml.in/yaml/v3"
 )
 
 // ConfigSection aliases goyaml's default map type.
 type ConfigSection map[interface{}]interface{}
+
+// UnmarshalYAML normalizes decoded mappings to ConfigSection at every
+// nesting level. go.yaml.in/yaml (unlike gopkg.in/yaml.v2) decodes a
+// mapping into an interface{} field as map[string]interface{}, not this
+// package's own map[interface{}]interface{} alias - without this,
+// GetSection's type switch would silently miss every subsection loaded
+// from a real YAML file, and mergo.Merge panics merging a decoded
+// map[string]interface{} against ZAS_DEFAULT_CONF's ConfigSection values.
+func (cs *ConfigSection) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var raw map[string]interface{}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+	out := make(ConfigSection, len(raw))
+	for key, value := range raw {
+		out[key] = normalizeConfigValue(value)
+	}
+	*cs = out
+	return nil
+}
+
+// normalizeConfigValue recursively converts any map[string]interface{}
+// produced by YAML decoding into ConfigSection, so GetSection recognizes
+// subsections regardless of nesting depth.
+func normalizeConfigValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		out := make(ConfigSection, len(v))
+		for key, item := range v {
+			out[key] = normalizeConfigValue(item)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(v))
+		for i, item := range v {
+			out[i] = normalizeConfigValue(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
 
 // NewConfig loads ZAS_CONF_FILE (as defined in constants.go).
 // It must be a YAML file.

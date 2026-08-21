@@ -34,8 +34,9 @@ func TestGetSectionScalarValue(t *testing.T) {
 }
 
 func TestGetSectionRawYAMLMap(t *testing.T) {
-	// yaml.Unmarshal produces nested sections as map[interface{}]interface{},
-	// not ConfigSection - GetSection must still recognize them.
+	// ConfigSection.UnmarshalYAML normalizes decoded nested sections to
+	// ConfigSection, but GetSection must still recognize a raw
+	// map[interface{}]interface{} for any section built by other means.
 	cs := ConfigSection{"site": map[interface{}]interface{}{"language": "en"}}
 	section := cs.GetSection("site")
 	if section == nil {
