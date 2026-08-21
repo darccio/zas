@@ -21,6 +21,8 @@ package zas
 import (
 	"os"
 	"path/filepath"
+
+	"dario.cat/mergo"
 )
 
 // Name is the application/binary name.
@@ -88,22 +90,20 @@ var defaultConfig = ConfigSection{
 
 // DefaultConfig returns a deep copy of the built-in default configuration,
 // safe for callers to read or even mutate without affecting subsequent calls
-// or any other code in the process.
+// or any other code in the process. It reuses the same mergo-based technique
+// NewConfig uses in init.go rather than a hand-rolled deep-copy helper:
+// pre-seeding a fresh, empty map for every nested section gives mergo.Merge's
+// own recursive merge somewhere to copy each value into that nothing else
+// references.
 func DefaultConfig() ConfigSection {
-	return cloneConfigSection(defaultConfig)
-}
-
-// cloneConfigSection returns a deep copy of src, recursing into any nested
-// ConfigSection values so the returned section shares no mutable state with
-// src.
-func cloneConfigSection(src ConfigSection) ConfigSection {
-	dst := make(ConfigSection, len(src))
-	for k, v := range src {
-		if section, ok := v.(ConfigSection); ok {
-			dst[k] = cloneConfigSection(section)
-			continue
+	dst := ConfigSection{}
+	for key, value := range defaultConfig {
+		if _, ok := value.(ConfigSection); ok {
+			dst[key] = ConfigSection{}
 		}
-		dst[k] = v
+	}
+	if err := mergo.Merge(&dst, defaultConfig); err != nil {
+		panic("zas: default configuration failed to merge: " + err.Error())
 	}
 	return dst
 }
