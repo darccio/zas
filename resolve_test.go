@@ -3,7 +3,7 @@ package zas
 import (
 	"testing"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
 // Extra must error both when a keypath segment isn't itself a section and
@@ -173,7 +173,7 @@ func TestURLWithoutTrailingSlashUnchanged(t *testing.T) {
 func TestEPropagatesLanguageError(t *testing.T) {
 	zd := &ZasData{
 		Page: map[interface{}]interface{}{"language": 5},
-		i18n: &gt.Build{},
+		i18n: &i18n.Build{},
 	}
 	if _, err := zd.E("greeting"); err == nil {
 		t.Fatal("E(): want error, got nil")
@@ -186,7 +186,7 @@ func TestEFallsBackOnMissingTranslation(t *testing.T) {
 	// the render.
 	zd := &ZasData{
 		Page: map[interface{}]interface{}{"language": "en"},
-		i18n: &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		i18n: &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	got, err := zd.E("missing.key")
 	if err != nil {

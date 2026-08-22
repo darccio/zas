@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 
 	"dario.cat/mergo"
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 	yaml "go.yaml.in/yaml/v3"
 )
 
@@ -87,28 +87,28 @@ func NewConfig() (ConfigSection, error) {
 
 // NewI18n loads I18nFile (as defined in constants.go).
 // It must be a YAML file.
-func NewI18n(mainlang string) (i18n gt.Strings, err error) {
+func NewI18n(mainlang string) (strs i18n.Strings, err error) {
 	data, err := os.ReadFile(I18nFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return make(gt.Strings), nil
+			return make(i18n.Strings), nil
 		}
 		return nil, err
 	}
-	i18n = make(gt.Strings)
-	if err = yaml.Unmarshal(data, &i18n); err != nil {
+	strs = make(i18n.Strings)
+	if err = yaml.Unmarshal(data, &strs); err != nil {
 		return nil, err
 	}
-	for k, v := range i18n {
+	for k, v := range strs {
 		if v == nil {
 			v = make(map[string]string)
-			i18n[k] = v
+			strs[k] = v
 		}
 		if _, ok := v[mainlang]; !ok {
 			v[mainlang] = k
 		}
 	}
-	return i18n, nil
+	return strs, nil
 }
 
 // GetString returns a string value from current section, or "" if key is

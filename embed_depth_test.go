@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
 // A file that embeds itself (directly, or through a cycle of mutually-
@@ -21,7 +21,7 @@ func TestRenderMarkdownSelfEmbedReturnsError(t *testing.T) {
 	}
 	gen := &Generator{
 		Config: ConfigSection{"mimetypes": ConfigSection{"text/markdown": "markdown"}},
-		I18n:   &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		I18n:   &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	err := gen.renderMarkdown("self.md")
 	if err == nil {

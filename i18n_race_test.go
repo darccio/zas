@@ -5,18 +5,18 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
-// Every render used to share one *gt.Build, racing on SetTarget/
+// Every render used to share one *i18n.Build, racing on SetTarget/
 // Translate's internal fields and letting one page's language bleed into
 // another's. Run under `go test -race`; also asserts each goroutine only
 // ever observes its own language's translation.
 func TestZasDataTranslationConcurrentNoRace(t *testing.T) {
-	index := gt.Strings{
+	index := i18n.Strings{
 		"greeting": {"en": "Hello", "es": "Hola", "fr": "Bonjour"},
 	}
-	gen := &Generator{I18n: &gt.Build{Index: index, Origin: "en"}}
+	gen := &Generator{I18n: &i18n.Build{Index: index, Origin: "en"}}
 	want := map[string]string{"en": "Hello", "es": "Hola", "fr": "Bonjour"}
 
 	var wg sync.WaitGroup

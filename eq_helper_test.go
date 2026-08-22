@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
 // helpers used to register its own "eq", shadowing html/template's builtin
@@ -65,7 +65,7 @@ func TestLayoutEqOnUncomparableTypesReturnsCleanError(t *testing.T) {
 	}
 	gen := &Generator{
 		Config: ConfigSection{"zas": ConfigSection{"deploy": "deploy"}},
-		I18n:   &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		I18n:   &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	// eq on two slices is still an error either way (Execute aborts on
 	// error same as on a recovered panic), but the builtin rejects
