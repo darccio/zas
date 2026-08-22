@@ -41,9 +41,9 @@ var subcommands = []*zas.Subcommand{
 }
 
 var (
-	verbose, full, noPlugins *bool
-	cmdInit                  = zas.NewSubcommand("init - create a new Zas site in the current directory", func() error {
-		i := zas.Init{}
+	verbose, full, noPlugins, force *bool
+	cmdInit                         = zas.NewSubcommand("init - create a new Zas site in the current directory", func() error {
+		i := zas.Init{Force: *force}
 		return i.Run()
 	})
 	cmdGenerate = zas.NewSubcommand("generate - render the site from source into the deploy directory", func() error {
@@ -64,6 +64,7 @@ func init() {
 	verbose = cmdGenerate.Flag.Bool("verbose", false, "Verbose output")
 	full = cmdGenerate.Flag.Bool("full", false, "Full generation (non-incremental mode)")
 	noPlugins = cmdGenerate.Flag.Bool("no-plugins", false, "Disable content-triggered plugin execution: <embed> MIME-type plugins and application/zas+ script tags (see README's \"Plugins\" section)")
+	force = cmdInit.Flag.Bool("force", false, "Overwrite an existing config.yml/layout.html with scaffolded defaults instead of leaving them untouched")
 
 	cmdHelp.Run = func() error {
 		printUsage(os.Stdout)
