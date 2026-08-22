@@ -28,50 +28,19 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 )
 
-// ConfigSection aliases goyaml's default map type.
-type ConfigSection map[interface{}]interface{}
-
-// UnmarshalYAML normalizes decoded mappings to ConfigSection at every
-// nesting level. go.yaml.in/yaml (unlike gopkg.in/yaml.v2) decodes a
-// mapping into an interface{} field as map[string]interface{}, not this
-// package's own map[interface{}]interface{} alias - without this,
-// GetSection's type switch would silently miss every subsection loaded
-// from a real YAML file, and mergo.Merge panics merging a decoded
-// map[string]interface{} against DefaultConfig's ConfigSection values.
-func (cs *ConfigSection) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var raw map[string]interface{}
-	if err := unmarshal(&raw); err != nil {
-		return err
-	}
-	out := make(ConfigSection, len(raw))
-	for key, value := range raw {
-		out[key] = normalizeConfigValue(value)
-	}
-	*cs = out
-	return nil
-}
-
-// normalizeConfigValue recursively converts any map[string]interface{}
-// produced by YAML decoding into ConfigSection, so GetSection recognizes
-// subsections regardless of nesting depth.
-func normalizeConfigValue(value interface{}) interface{} {
-	switch v := value.(type) {
-	case map[string]interface{}:
-		out := make(ConfigSection, len(v))
-		for key, item := range v {
-			out[key] = normalizeConfigValue(item)
-		}
-		return out
-	case []interface{}:
-		out := make([]interface{}, len(v))
-		for i, item := range v {
-			out[i] = normalizeConfigValue(item)
-		}
-		return out
-	default:
-		return value
-	}
-}
+// ConfigSection is a section of zas configuration: a string-keyed map,
+// as produced by decoding a YAML mapping and by every ConfigSection{...}
+// literal in this package. go.yaml.in/yaml/v3 special-cases a named map
+// type whose keys are strings and whose values are interface{}: once it
+// decodes the outermost mapping into a ConfigSection, it keeps using that
+// same named type for every nested mapping found inside an interface{}
+// value, at any depth (see stringMapType propagation in its decoder) -
+// so a config.yml with several levels of nested sections decodes into
+// nested ConfigSection values all the way down, with no custom
+// UnmarshalYAML method required. (That propagation requires every key in
+// the mapping to be a string; GetSection's map[string]interface{}
+// fallback below covers a section that arrives some other way.)
+type ConfigSection map[string]interface{}
 
 // NewConfig loads ConfigFile (as defined in constants.go).
 // It must be a YAML file.
@@ -154,7 +123,11 @@ func (cs ConfigSection) GetSection(key string) (value ConfigSection) {
 	switch raw := cs[key].(type) {
 	case ConfigSection:
 		value = raw
-	case map[interface{}]interface{}:
+	case map[string]interface{}:
+		// A section built by some means other than decoding YAML into a
+		// ConfigSection-typed destination (e.g. a caller constructing one
+		// by hand as a plain map[string]interface{}) - see
+		// TestGetSectionRawYAMLMap.
 		value = ConfigSection(raw)
 	}
 	return

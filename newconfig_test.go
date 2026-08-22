@@ -95,3 +95,62 @@ func TestNewConfigMergesPartialSection(t *testing.T) {
 		t.Fatalf(`GetSection("mimetypes").GetString("text/plain") = %q, want the default value %q`, got, "plain")
 	}
 }
+
+// GetSection must recognize a subsection as a section regardless of how
+// deeply it is nested. go.yaml.in/yaml/v3 only keeps decoding nested
+// mappings into the named ConfigSection type (rather than some other map
+// type GetSection wouldn't recognize) by propagating that named type
+// downward from the enclosing map on every decode - a bug here would
+// typically only show up two or more levels deep, since the outermost
+// mapping always decodes correctly on its own.
+func TestNewConfigNestedSections(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.MkdirAll(Dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	yaml := "zas:\n" +
+		"  layout: .zas/layout.html\n" +
+		"  deploy: .zas/deploy\n" +
+		"site:\n" +
+		"  language: en\n" +
+		"  analytics:\n" +
+		"    provider: acme\n" +
+		"    settings:\n" +
+		"      id: UA-123\n" +
+		"      nested:\n" +
+		"        flag: enabled\n"
+	if err := os.WriteFile(ConfigFile, []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error = %v, want nil", err)
+	}
+
+	site := cfg.GetSection("site")
+	if site == nil {
+		t.Fatal(`cfg.GetSection("site") = nil, want a section`)
+	}
+	analytics := site.GetSection("analytics")
+	if analytics == nil {
+		t.Fatal(`site.GetSection("analytics") = nil, want a section (2 levels deep)`)
+	}
+	if got := analytics.GetString("provider"); got != "acme" {
+		t.Fatalf(`analytics.GetString("provider") = %q, want %q`, got, "acme")
+	}
+	settings := analytics.GetSection("settings")
+	if settings == nil {
+		t.Fatal(`analytics.GetSection("settings") = nil, want a section (3 levels deep)`)
+	}
+	if got := settings.GetString("id"); got != "UA-123" {
+		t.Fatalf(`settings.GetString("id") = %q, want %q`, got, "UA-123")
+	}
+	nested := settings.GetSection("nested")
+	if nested == nil {
+		t.Fatal(`settings.GetSection("nested") = nil, want a section (4 levels deep)`)
+	}
+	if got := nested.GetString("flag"); got != "enabled" {
+		t.Fatalf(`nested.GetString("flag") = %q, want %q`, got, "enabled")
+	}
+}

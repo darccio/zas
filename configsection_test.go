@@ -34,10 +34,11 @@ func TestGetSectionScalarValue(t *testing.T) {
 }
 
 func TestGetSectionRawYAMLMap(t *testing.T) {
-	// ConfigSection.UnmarshalYAML normalizes decoded nested sections to
-	// ConfigSection, but GetSection must still recognize a raw
-	// map[interface{}]interface{} for any section built by other means.
-	cs := ConfigSection{"site": map[interface{}]interface{}{"language": "en"}}
+	// go.yaml.in/yaml/v3 decodes every nested section into ConfigSection
+	// itself (see the type's doc comment in init.go), but GetSection must
+	// still recognize a raw map[string]interface{} for any section built
+	// by other means, e.g. a caller constructing one by hand.
+	cs := ConfigSection{"site": map[string]interface{}{"language": "en"}}
 	section := cs.GetSection("site")
 	if section == nil {
 		t.Fatal("GetSection() = nil, want a section")
