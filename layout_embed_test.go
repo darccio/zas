@@ -31,18 +31,12 @@ import (
 // replacing it with something that only walks the page's own body, would
 // silently stop layout-level embeds from working.
 //
-// This assertion is deliberately loose about exact markup shape: Html's
-// handler (generate.go) splices in the embedded file's whole parsed
-// document - <html><head>...<body>... - rather than just its body's
-// contents, same pre-existing gap F5 (F5-embed-injects-body-html.md)
-// already tracks for page-body-level embeds. Page-body embeds only look
-// clean today because they get a second, further re-parse (this same
-// Generate pass) whose HTML5 error recovery quietly drops the duplicate
-// html/body tags; a layout-level embed like this one has no such further
-// pass to hide behind, so the nesting survives into deployed output
-// verbatim - confirmed live and noted on F5's own file. Once F5's
-// remaining sub-claims land, this test should keep passing unchanged and
-// could be tightened to assert the exact clean markup.
+// Html's handler (generate.go) splices in only the embedded file's body
+// contents, not its whole parsed document, so a layout-level embed like
+// this one - which has no further re-parse downstream to paper over a
+// nesting mistake - must still deploy with exactly the outer page's own
+// single <html>/<head>/<body>, not a second, stray one nested from the
+// embedded document.
 func TestGenerateResolvesEmbedInLayoutItself(t *testing.T) {
 	newTestSite(t, "layout-embed-site")
 	if err := generate(t); err != nil {
@@ -54,5 +48,10 @@ func TestGenerateResolvesEmbedInLayoutItself(t *testing.T) {
 	}
 	if strings.Contains(got, "<embed") {
 		t.Fatalf("deployed index.html = %q, want the layout's <embed> tag replaced, not left in place", got)
+	}
+	for _, tag := range []string{"<html", "<head", "<body"} {
+		if n := strings.Count(got, tag); n != 1 {
+			t.Fatalf("deployed index.html = %q, want exactly one %q (the outer page's own), got %d", got, tag, n)
+		}
 	}
 }
