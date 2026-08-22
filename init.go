@@ -111,24 +111,42 @@ func NewI18n(mainlang string) (i18n gt.Strings, err error) {
 	return i18n, nil
 }
 
-// GetString returns a string value from current section.
+// GetString returns a string value from current section, or "" if key is
+// missing or not a string. Callers that need to tell "absent"/"wrong type"
+// apart from a legitimately empty string should use GetStringOK instead.
 func (cs ConfigSection) GetString(key string) (value string) {
-	value, _ = cs[key].(string)
+	value, _ = cs.GetStringOK(key)
+	return
+}
+
+// GetStringOK returns a string value from current section, and whether key
+// was present and held a string value. ok is false both when key is absent
+// and when it holds a non-string value; callers that need to tell those two
+// cases apart should check key's presence themselves beforehand.
+func (cs ConfigSection) GetStringOK(key string) (value string, ok bool) {
+	value, ok = cs[key].(string)
 	return
 }
 
 // GetSection returns a subsection from current section, or nil if key is
 // missing or not a section.
 func (cs ConfigSection) GetSection(key string) (value ConfigSection) {
+	value, _ = cs.GetSectionOK(key)
+	return
+}
+
+// GetSectionOK returns a subsection from current section, and whether key
+// resolved to a real section.
+func (cs ConfigSection) GetSectionOK(key string) (value ConfigSection, ok bool) {
 	switch raw := cs[key].(type) {
 	case ConfigSection:
-		value = raw
+		value, ok = raw, true
 	case map[string]interface{}:
 		// A section built by some means other than decoding YAML into a
 		// ConfigSection-typed destination (e.g. a caller constructing one
 		// by hand as a plain map[string]interface{}) - see
 		// TestGetSectionRawYAMLMap.
-		value = ConfigSection(raw)
+		value, ok = ConfigSection(raw), true
 	}
 	return
 }
