@@ -3,7 +3,9 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      # Strict semver only (v1.2.3) - not "v*", which would also fire on
+      # any other tag starting with "v" (v-test, vNext, version-2, ...).
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
   contents: write
