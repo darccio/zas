@@ -1306,7 +1306,7 @@ func (gen *Generator) getTitle(doc *goquery.Document) (title string) {
 }
 
 /*
- * Extracts first HTML commend as map. It expects it as a valid YAML map.
+ * Extracts first HTML comment as map. It expects it as a valid YAML map.
  *
  * The config comment is looked for among the document's top-level nodes
  * (Doctype, comments, the <html> element, ...), not just the literal first
