@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
 // data.Body carries only a source page's inner HTML, not its <body>
@@ -24,7 +24,7 @@ func TestRenderPreservesSourceBodyAttributes(t *testing.T) {
 	}
 	gen := &Generator{
 		Config: ConfigSection{"zas": ConfigSection{"deploy": "deploy"}},
-		I18n:   &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		I18n:   &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	layout, err := thtml.New("layout").Funcs(helpers).Parse(`<body class="layout">{{.Body}}</body>`)
 	if err != nil {
@@ -59,7 +59,7 @@ func TestRenderWithoutSourceBodyAttributesLeavesLayoutUnchanged(t *testing.T) {
 	}
 	gen := &Generator{
 		Config: ConfigSection{"zas": ConfigSection{"deploy": "deploy"}},
-		I18n:   &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		I18n:   &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	layout, err := thtml.New("layout").Funcs(helpers).Parse(`<body class="layout">{{.Body}}</body>`)
 	if err != nil {

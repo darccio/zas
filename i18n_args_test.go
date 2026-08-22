@@ -4,19 +4,19 @@ import (
 	thtml "html/template"
 	"testing"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
-// Translate's arguments must be spread into gt.Translate's variadic
+// Translate's arguments must be spread into i18n.Build.Translate's variadic
 // parameter, not passed as a single []interface{} value - otherwise fmt's
 // verbs only ever see one argument (the slice itself), and any string with
-// more than one verb fails gt's verb/argument count check entirely.
+// more than one verb fails Translate's verb/argument count check entirely.
 
 func TestESpreadsSingleArgument(t *testing.T) {
 	zd := &ZasData{
 		Page: map[interface{}]interface{}{"language": "en"},
-		i18n: &gt.Build{
-			Index:  gt.Strings{"Hello %s": {"en": "Hello %s"}},
+		i18n: &i18n.Build{
+			Index:  i18n.Strings{"Hello %s": {"en": "Hello %s"}},
 			Origin: "en",
 		},
 	}
@@ -32,8 +32,8 @@ func TestESpreadsSingleArgument(t *testing.T) {
 func TestESpreadsMultipleArguments(t *testing.T) {
 	zd := &ZasData{
 		Page: map[interface{}]interface{}{"language": "en"},
-		i18n: &gt.Build{
-			Index: gt.Strings{
+		i18n: &i18n.Build{
+			Index: i18n.Strings{
 				"greeting": {"en": "Hello %s, you have %s messages"},
 			},
 			Origin: "en",
@@ -51,8 +51,8 @@ func TestESpreadsMultipleArguments(t *testing.T) {
 func TestHSpreadsArguments(t *testing.T) {
 	zd := &ZasData{
 		Page: map[interface{}]interface{}{"language": "en"},
-		i18n: &gt.Build{
-			Index:  gt.Strings{"Hello %s": {"en": "Hello %s"}},
+		i18n: &i18n.Build{
+			Index:  i18n.Strings{"Hello %s": {"en": "Hello %s"}},
 			Origin: "en",
 		},
 	}

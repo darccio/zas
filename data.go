@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
 // ZasData is the context data store used in templates.
@@ -70,7 +70,7 @@ type ZasData struct {
 	// Config loaded from ConfigFile.
 	config ConfigSection
 	// i18n helper
-	i18n *gt.Build
+	i18n *i18n.Build
 	// Attributes from the source page's own <body> tag (if any), merged
 	// onto the layout's <body> element since Body only carries the source
 	// body's inner HTML, not the element itself.
@@ -208,10 +208,10 @@ func NewZasData(srcPath string, gen *Generator) (data ZasData) {
 	// home page can still be recognized as one there too).
 	data.Path = "/" + filepath.ToSlash(srcPath)
 	data.config = gen.Config
-	// Each ZasData gets its own gt.Build sharing the (read-only, post-init)
+	// Each ZasData gets its own i18n.Build sharing the (read-only, post-init)
 	// Index, so per-render SetTarget/Translate calls don't race or bleed
 	// across languages on a Build shared by every render goroutine.
-	data.i18n = &gt.Build{
+	data.i18n = &i18n.Build{
 		Index:  gen.I18n.Index,
 		Origin: gen.I18n.Origin,
 	}

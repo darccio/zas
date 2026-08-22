@@ -37,7 +37,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 	markdown "github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -152,7 +152,7 @@ type Generator struct {
 	// Default layout from Config[Name]["layout"].
 	Layout *thtml.Template
 	// i18n helper.
-	I18n *gt.Build
+	I18n *i18n.Build
 	// layoutModTime, configModTime, and i18nModTime are the shared
 	// dependency files' mtimes, each captured once during Run's startup
 	// phase (parseLayout, Run, loadI18N) instead of being stat'd per page,
@@ -495,7 +495,7 @@ func (gen *Generator) loadI18N() {
 		gen.recordErr(err)
 		return
 	}
-	gen.I18n = &gt.Build{
+	gen.I18n = &i18n.Build{
 		Index:  i18nStrings,
 		Origin: mainlang,
 	}
