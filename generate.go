@@ -132,16 +132,19 @@ type Generator struct {
 	Verbose bool
 	// Full generation (non-incremental mode).
 	Full bool
-	// NoPlugins disables content-triggered MIME-type plugin execution (see
-	// handleMIMETypePlugin): an embed that resolves to an external plugin
-	// fails with a clear per-page error instead of exec'ing anything. It
-	// has no effect on zas's own internal embed handlers (Markdown, Plain,
-	// Html), which never spawn a process, or on the separate zs<name>
-	// subcommand-plugin mechanism cmd/zas dispatches directly from argv -
-	// that path only ever fires from a name the invoking user typed
-	// themselves, not from site content. Set this when generating from
-	// content you don't fully control (see README's "Plugins" section for
-	// the full trust model this guards).
+	// NoPlugins disables every content-triggered plugin execution: an
+	// <embed> resolving to an external MIME-type plugin
+	// (handleMIMETypePlugin) and a <script type="application/zas+name">
+	// tag that would exec zs<name> (handleScriptPlugin) each fail with a
+	// clear per-page error instead of exec'ing anything. It has no effect
+	// on zas's own internal embed handlers (Markdown, Plain, Html), which
+	// never spawn a process, or on the argv dispatch in cmd/zas, which is
+	// chosen by a name the invoking user typed. Note the zs<name> binaries
+	// themselves are no longer argv-only reachable - script-tag plugins let
+	// page content name one directly, which is exactly what this flag
+	// shuts off. Set this when generating from content you don't fully
+	// control (see README's "Plugins" section for the full trust model
+	// this guards).
 	NoPlugins bool
 	// Config holds the site configuration. Run always overwrites it with
 	// the freshly loaded contents of ConfigFile, so setting it before
@@ -370,20 +373,23 @@ func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
 	// This parseAndReplace is a second full HTML5 parse of the page - render
 	// already ran one over the page's own source to produce data.Body. It's
 	// not redundant: render's parse only ever sees the page's own markup, so
-	// an <embed> written directly into layout.html itself (outside
-	// {{.Body}}, e.g. a site-wide footer) is invisible to it and can only
-	// resolve here, against the fully assembled layout+body page (see
-	// TestGenerateResolvesEmbedInLayoutItself). html/template also has no
-	// notion of a parsed tree to merge the two passes' output into - it
-	// only ever produces bytes - so there's no cheaper way to give this
-	// pass's embed handling a shot at the assembled page than re-parsing
-	// it whole. Re-serializing through html5.Render below is also why
-	// deployed output isn't guaranteed byte-identical to what either the
-	// page or the layout wrote: HTML5's parser normalizes as it goes
-	// (attribute quoting, tag casing, void-element closing, entity
+	// an <embed> or a <script type="application/zas+..."> plugin tag
+	// written directly into layout.html itself (outside {{.Body}}, e.g. a
+	// site-wide footer, or a <meta> generator in <head>) is invisible to it
+	// and can only resolve here, against the fully assembled layout+body
+	// page (see TestGenerateResolvesEmbedInLayoutItself). html/template
+	// also has no notion of a parsed tree to merge the two passes' output
+	// into - it only ever produces bytes - so there's no cheaper way to
+	// give this pass's embed/script handling a shot at the assembled page
+	// than re-parsing it whole. Re-serializing through html5.Render below
+	// is also why deployed output isn't guaranteed byte-identical to what
+	// either the page or the layout wrote: HTML5's parser normalizes as it
+	// goes (attribute quoting, tag casing, void-element closing, entity
 	// escaping), so this isn't a candidate for a stricter, non-repairing
-	// parse.
-	doc, err := gen.parseAndReplace(&processed, data)
+	// parse. headRendered (see headFate) reflects that this pass, unlike
+	// every other parseAndReplace call, produces the document whose <head>
+	// actually reaches deployed output.
+	doc, err := gen.parseAndReplace(&processed, data, headRendered)
 	if err != nil {
 		return
 	}
@@ -411,7 +417,24 @@ func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
 // goroutine's stack is exhausted.
 const maxEmbedDepth = 20
 
-func (gen *Generator) parseAndReplace(processed io.Reader, data *ZasData) (doc *goquery.Document, err error) {
+// headFate says whether the <head> of the document being parsed survives
+// into deployed output. Only Generate's pass renders a whole assembled
+// page; render's own pass, and every embed handler, only ever keeps a
+// document's body (see data.Body in render, and the .Contents() splices in
+// Markdown/Html) - so a script-tag plugin's output placed in <head> there
+// is discarded regardless of what it is, while Generate's own pass can
+// actually deliver head-eligible output (<meta>, <link>, ...) to the
+// deployed page. handleScriptTags uses this to decide whether <head>
+// placement is refused outright or merely required to produce something
+// that HTML5 will actually let live there - see handleScriptPlugin.
+type headFate bool
+
+const (
+	headDropped  headFate = false
+	headRendered headFate = true
+)
+
+func (gen *Generator) parseAndReplace(processed io.Reader, data *ZasData, head headFate) (doc *goquery.Document, err error) {
 	if data.embedDepth >= maxEmbedDepth {
 		return nil, fmt.Errorf("embed nesting deeper than %d levels; check for a self- or mutually-embedding file", maxEmbedDepth)
 	}
@@ -420,6 +443,9 @@ func (gen *Generator) parseAndReplace(processed io.Reader, data *ZasData) (doc *
 	// Here we manipulate its result.
 	doc, err = goquery.NewDocumentFromReader(processed)
 	if err != nil {
+		return
+	}
+	if err = gen.handleScriptTags(doc, head); err != nil {
 		return
 	}
 	err = gen.handleEmbedTags(doc, data)
@@ -1172,7 +1198,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 			return
 		}
 	}
-	doc, err := gen.parseAndReplace(&processed, &data)
+	doc, err := gen.parseAndReplace(&processed, &data, headDropped)
 	if err != nil {
 		return
 	}
@@ -1384,7 +1410,7 @@ func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *
 		if err := markdownConverter.Convert(mdInput, &b); err != nil {
 			return err
 		}
-		mdDoc, err := gen.parseAndReplace(&b, data)
+		mdDoc, err := gen.parseAndReplace(&b, data, headDropped)
 		if err != nil {
 			return err
 		}
@@ -1440,7 +1466,7 @@ func (gen *Generator) Html(e *goquery.Selection, _ *goquery.Document, data *ZasD
 			return err
 		}
 		var htmlDoc *goquery.Document
-		htmlDoc, err = gen.parseAndReplace(bytes.NewBuffer(input), data)
+		htmlDoc, err = gen.parseAndReplace(bytes.NewBuffer(input), data, headDropped)
 		if err != nil {
 			return err
 		}
