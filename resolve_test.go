@@ -6,6 +6,63 @@ import (
 	"github.com/melvinmt/gt"
 )
 
+// Extra must error both when a keypath segment isn't itself a section and
+// when the final key is missing or holds a non-string value - previously
+// the final-key case silently "succeeded" with "", indistinguishable from a
+// legitimately empty string (Resolve, Extra's only production caller,
+// already discards this error deliberately - see
+// TestResolveMissingKeyFallsBackToEmpty - so this doesn't change Resolve's
+// own behavior).
+
+func TestExtraReturnsValueForPresentStringKey(t *testing.T) {
+	zd := &ZasData{
+		config: ConfigSection{"site": ConfigSection{"language": "en"}},
+	}
+	got, err := zd.Extra("/site/language")
+	if err != nil {
+		t.Fatalf("Extra() error = %v, want nil", err)
+	}
+	if got != "en" {
+		t.Fatalf("Extra() = %q, want %q", got, "en")
+	}
+}
+
+func TestExtraErrorsOnMissingFinalKey(t *testing.T) {
+	zd := &ZasData{
+		config: ConfigSection{"site": ConfigSection{}},
+	}
+	got, err := zd.Extra("/site/language")
+	if err == nil {
+		t.Fatal("Extra() with a missing final key: want error, got nil")
+	}
+	if got != "" {
+		t.Fatalf("Extra() = %q, want empty string", got)
+	}
+}
+
+func TestExtraErrorsOnWrongTypeFinalKey(t *testing.T) {
+	// e.g. a config value like "language: 5" where a string was expected.
+	zd := &ZasData{
+		config: ConfigSection{"site": ConfigSection{"language": 5}},
+	}
+	got, err := zd.Extra("/site/language")
+	if err == nil {
+		t.Fatal("Extra() with a non-string final value: want error, got nil")
+	}
+	if got != "" {
+		t.Fatalf("Extra() = %q, want empty string", got)
+	}
+}
+
+func TestExtraErrorsOnBadSectionSegment(t *testing.T) {
+	zd := &ZasData{
+		config: ConfigSection{"site": "not-a-section"},
+	}
+	if _, err := zd.Extra("/site/language"); err == nil {
+		t.Fatal("Extra() with a non-section path segment: want error, got nil")
+	}
+}
+
 // Resolve must error on a present-but-non-string value instead of
 // panicking on the `.(string)` assertion, while still falling back to ""
 // when the key is genuinely absent.

@@ -107,7 +107,9 @@ func (zd *ZasData) URL() string {
 }
 
 // Extra is a helper template method to get any value from ZasData.config
-// using paths.
+// using paths. It errors both when a path segment isn't itself a section
+// and when the final key is missing or isn't a string - the two ways a
+// keypath can fail to resolve to a real value.
 func (zd *ZasData) Extra(keypath string) (value string, err error) {
 	keypath = path.Clean(keypath)
 	if path.IsAbs(keypath) {
@@ -124,7 +126,10 @@ func (zd *ZasData) Extra(keypath string) (value string, err error) {
 			return
 		}
 	}
-	value = section.GetString(key)
+	var ok bool
+	if value, ok = section.GetStringOK(key); !ok {
+		err = errors.New("not found")
+	}
 	return
 }
 
