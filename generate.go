@@ -381,9 +381,8 @@ func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
 	// deployed output isn't guaranteed byte-identical to what either the
 	// page or the layout wrote: HTML5's parser normalizes as it goes
 	// (attribute quoting, tag casing, void-element closing, entity
-	// escaping) - the embed mechanism actually depends on that leniency
-	// today (see F5-embed-injects-body-html.md), so this isn't a candidate
-	// for a stricter, non-repairing parse either.
+	// escaping), so this isn't a candidate for a stricter, non-repairing
+	// parse.
 	doc, err := gen.parseAndReplace(&processed, data)
 	if err != nil {
 		return
@@ -1373,7 +1372,15 @@ func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *
 		if err != nil {
 			return err
 		}
-		e.ReplaceWithSelection(mdDoc.Find(atom.Body.String()))
+		// Contents(), not the body Selection itself: splicing in the <body>
+		// element would nest a second body inside the host page. Only a
+		// page-body-level embed used to get away with this, because
+		// Generate's own re-parse of the fully assembled page silently
+		// dropped the resulting duplicate body tag via HTML5 error recovery
+		// - an embed anywhere else (e.g. written directly into layout.html)
+		// has no further parse to hide behind, so the nesting survived into
+		// deployed output.
+		e.ReplaceWithSelection(mdDoc.Find(atom.Body.String()).Contents())
 	}
 	return
 }
@@ -1421,7 +1428,16 @@ func (gen *Generator) Html(e *goquery.Selection, _ *goquery.Document, data *ZasD
 		if err != nil {
 			return err
 		}
-		e.ReplaceWithSelection(htmlDoc.Children())
+		// htmlDoc.Children() would give the parsed <html> element itself
+		// (the document node's only child), nesting a whole
+		// <html><head>...<body>... structure - including the embedded
+		// file's own <head> content (title/meta/style) - into the host
+		// page. Find the embedded body and take only its Contents(),
+		// dropping the embedded file's <head> entirely: there's no
+		// principled place in the host page to merge title/meta/style tags
+		// from an arbitrary embed point, and the host page's own <head> is
+		// long since rendered and gone by the time an embed resolves.
+		e.ReplaceWithSelection(htmlDoc.Find(atom.Body.String()).Contents())
 	}
 	return
 }
