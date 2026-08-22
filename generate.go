@@ -1176,6 +1176,22 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	if err != nil {
 		return
 	}
+	if lost := doc.Find(atom.Head.String()).Children(); lost.Length() > 0 {
+		// HTML5's tree construction sends a handful of elements (script,
+		// meta, link, base, style, title) straight into <head> when they're
+		// encountered before any real body content - even after a leading
+		// "<!-- key: value -->" config comment, which does not itself force
+		// body insertion mode. data.Body below is built solely from
+		// doc.Find("body").Html(), so anything the parser routed into <head>
+		// here would otherwise vanish from deployed output with no error or
+		// warning at all - a plausible trap for an ordinary page that opens
+		// with an analytics <script> or a JSON-LD block. Fail loudly instead.
+		var kinds []string
+		lost.Each(func(_ int, e *goquery.Selection) {
+			kinds = append(kinds, goquery.NodeName(e))
+		})
+		return fmt.Errorf("%s: parsed into <head> and would be silently dropped from the page: move it after the page's first real body content (a leading config comment does not count)", strings.Join(kinds, ", "))
+	}
 	gen.cleanUnnecessaryPTags(doc)
 	var pageErr error
 	data.Page, pageErr = gen.extractPageConfig(doc)

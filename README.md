@@ -254,6 +254,8 @@ Zas still reads and processes `navigation.md` normally wherever it's embedded, b
 
 Every page goes through Zas's HTML5 parser twice: once on its own, to extract its body and settings, and once more after the layout wraps it, so any `<embed>` in the layout itself gets its turn too. Both passes re-serialize what they parse, and HTML5's parser is lenient by design - it repairs markup as it goes rather than rejecting it - so deployed output can differ mechanically from what you wrote: attributes get quoted, tag names get lowercased, void elements like `<img>`/`<br>` get self-closed, stray `&` characters get entity-escaped. Nothing is lost, and this is also why the embed mechanism above can splice arbitrary snippets together reliably - but don't expect deployed HTML to be a byte-for-byte copy of your source.
 
+One consequence of that first, page-only parse: HTML5 places a `<script>`, `<meta>`, `<link>`, `<base>`, `<style>`, or `<title>` written before any other real content into `<head>` rather than `<body>` - and a leading `<!-- key: value -->` config comment doesn't change that. Since only a page's `<body>` carries over into deployed output, such a tag would otherwise vanish silently; Zas instead fails the build for that page and names the tag. Put it after the page's first real content (even just an `<h1>`) and it renders exactly as written.
+
 ## 你会说普通话?
 
 對不起。T我不会说普通话。That's all my Chinese! If you are here, I guess you will enjoy I18N support in Zas.
