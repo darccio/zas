@@ -128,3 +128,74 @@ func TestGetSectionOKMissingKey(t *testing.T) {
 		t.Fatalf("GetSectionOK() = %v, want nil", section)
 	}
 }
+
+// GetStringSlice/GetStringSliceOK must recognize the []interface{} shape
+// go.yaml.in/yaml/v3 decodes a YAML sequence into, and reject anything else
+// instead of panicking.
+
+func TestGetStringSliceOKPresent(t *testing.T) {
+	cs := ConfigSection{"allowed_dotdirs": []interface{}{".well-known", ".koan"}}
+	got, ok := cs.GetStringSliceOK("allowed_dotdirs")
+	if !ok {
+		t.Fatal("GetStringSliceOK() ok = false, want true")
+	}
+	want := []string{".well-known", ".koan"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("GetStringSliceOK() = %v, want %v", got, want)
+	}
+}
+
+func TestGetStringSliceOKMissingKey(t *testing.T) {
+	cs := ConfigSection{}
+	got, ok := cs.GetStringSliceOK("nope")
+	if ok {
+		t.Fatal("GetStringSliceOK() ok = true, want false for a missing key")
+	}
+	if got != nil {
+		t.Fatalf("GetStringSliceOK() = %v, want nil", got)
+	}
+}
+
+func TestGetStringSliceOKWrongType(t *testing.T) {
+	cs := ConfigSection{"allowed_dotdirs": "not-a-sequence"}
+	got, ok := cs.GetStringSliceOK("allowed_dotdirs")
+	if ok {
+		t.Fatal("GetStringSliceOK() ok = true, want false for a scalar value")
+	}
+	if got != nil {
+		t.Fatalf("GetStringSliceOK() = %v, want nil", got)
+	}
+}
+
+func TestGetStringSliceOKNonStringElement(t *testing.T) {
+	cs := ConfigSection{"allowed_dotdirs": []interface{}{".well-known", 42}}
+	got, ok := cs.GetStringSliceOK("allowed_dotdirs")
+	if ok {
+		t.Fatal("GetStringSliceOK() ok = true, want false for a sequence with a non-string element")
+	}
+	if got != nil {
+		t.Fatalf("GetStringSliceOK() = %v, want nil", got)
+	}
+}
+
+func TestGetStringSliceMissingKey(t *testing.T) {
+	cs := ConfigSection{}
+	if got := cs.GetStringSlice("nope"); got != nil {
+		t.Fatalf("GetStringSlice() = %v, want nil", got)
+	}
+}
+
+func TestGetZStringSlicePresent(t *testing.T) {
+	cs := ConfigSection{Name: ConfigSection{"allowed_dotdirs": []interface{}{".well-known"}}}
+	got := cs.GetZStringSlice("allowed_dotdirs")
+	if len(got) != 1 || got[0] != ".well-known" {
+		t.Fatalf("GetZStringSlice() = %v, want [%q]", got, ".well-known")
+	}
+}
+
+func TestGetZStringSliceMissingSection(t *testing.T) {
+	cs := ConfigSection{}
+	if got := cs.GetZStringSlice("allowed_dotdirs"); got != nil {
+		t.Fatalf("GetZStringSlice() = %v, want nil", got)
+	}
+}

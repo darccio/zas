@@ -56,6 +56,15 @@ You can override the `site` config section in two ways:
 1. HTML comment in files (most precedence).
 2. `.zas.yml` file at the directory level. Its scope is its directory and subdirectories (until another `.zas.yml` is found).
 
+By default, dot-files and dot-directories (anything whose name starts with `.`) are skipped entirely, at any depth - `.git`, editor swap files, and so on. A site that genuinely needs a specific top-level dot-directory published - `.well-known/`, for example, which browsers and ACME clients expect to find at a site's root - can opt it back in with `allowed_dotdirs` under the `zas` section:
+
+```yaml
+zas:
+  allowed_dotdirs: [".well-known"]
+```
+
+Only an exact, top-level match is honored: no prefix or glob matching, and a dot-directory nested anywhere - including inside an allowed one - still gets skipped. `.zas` and `.git` can never be allowlisted this way, no matter what's listed in config.
+
 To extend Zas functionality, you can use and create plugins. You can develop them in any language (not only in Golang) thanks to Unix magic. And more gophers.
 
 ### Plugins

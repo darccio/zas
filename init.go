@@ -157,6 +157,43 @@ func (cs ConfigSection) GetZString(key string) string {
 	return s.GetString(key)
 }
 
+// GetStringSlice returns a string-slice value from current section, or nil
+// if key is missing, not a sequence, or contains any non-string element.
+func (cs ConfigSection) GetStringSlice(key string) (value []string) {
+	value, _ = cs.GetStringSliceOK(key)
+	return
+}
+
+// GetStringSliceOK returns a string-slice value from current section, and
+// whether key was present and held a sequence of strings. ok is false when
+// key is absent, holds a non-sequence value, or holds a sequence with any
+// non-string element - go.yaml.in/yaml/v3 decodes a YAML sequence into
+// []interface{}, the same way it decodes a mapping into ConfigSection (see
+// that type's doc comment above), so each element still needs its own type
+// assertion.
+func (cs ConfigSection) GetStringSliceOK(key string) (value []string, ok bool) {
+	raw, isSeq := cs[key].([]interface{})
+	if !isSeq {
+		return nil, false
+	}
+	value = make([]string, 0, len(raw))
+	for _, item := range raw {
+		s, isString := item.(string)
+		if !isString {
+			return nil, false
+		}
+		value = append(value, s)
+	}
+	return value, true
+}
+
+// GetZStringSlice returns a string-slice value from the default Zas
+// section.
+func (cs ConfigSection) GetZStringSlice(key string) []string {
+	s := cs.GetSection(Name)
+	return s.GetStringSlice(key)
+}
+
 // Init implements the "init" subcommand, which scaffolds a new Zas
 // repository in the current directory.
 type Init struct{}
