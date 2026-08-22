@@ -367,6 +367,23 @@ func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
 	if err = gen.Layout.Execute(&processed, data); err != nil {
 		return
 	}
+	// This parseAndReplace is a second full HTML5 parse of the page - render
+	// already ran one over the page's own source to produce data.Body. It's
+	// not redundant: render's parse only ever sees the page's own markup, so
+	// an <embed> written directly into layout.html itself (outside
+	// {{.Body}}, e.g. a site-wide footer) is invisible to it and can only
+	// resolve here, against the fully assembled layout+body page (see
+	// TestGenerateResolvesEmbedInLayoutItself). html/template also has no
+	// notion of a parsed tree to merge the two passes' output into - it
+	// only ever produces bytes - so there's no cheaper way to give this
+	// pass's embed handling a shot at the assembled page than re-parsing
+	// it whole. Re-serializing through html5.Render below is also why
+	// deployed output isn't guaranteed byte-identical to what either the
+	// page or the layout wrote: HTML5's parser normalizes as it goes
+	// (attribute quoting, tag casing, void-element closing, entity
+	// escaping) - the embed mechanism actually depends on that leniency
+	// today (see F5-embed-injects-body-html.md), so this isn't a candidate
+	// for a stricter, non-repairing parse either.
 	doc, err := gen.parseAndReplace(&processed, data)
 	if err != nil {
 		return
