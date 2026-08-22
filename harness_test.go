@@ -49,6 +49,10 @@ func fullGen(g *Generator) {
 	g.Full = true
 }
 
+func noPluginsGen(g *Generator) {
+	g.NoPlugins = true
+}
+
 func readDeploy(t *testing.T, rel string) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(".zas", "deploy", rel))

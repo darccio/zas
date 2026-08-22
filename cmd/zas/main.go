@@ -63,7 +63,7 @@ var (
 func init() {
 	verbose = cmdGenerate.Flag.Bool("verbose", false, "Verbose output")
 	full = cmdGenerate.Flag.Bool("full", false, "Full generation (non-incremental mode)")
-	noPlugins = cmdGenerate.Flag.Bool("no-plugins", false, "Disable content-triggered MIME-type plugin execution (see README's \"Plugins\" section)")
+	noPlugins = cmdGenerate.Flag.Bool("no-plugins", false, "Disable content-triggered plugin execution: <embed> MIME-type plugins and application/zas+ script tags (see README's \"Plugins\" section)")
 
 	cmdHelp.Run = func() error {
 		printUsage(os.Stdout)
