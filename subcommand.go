@@ -25,8 +25,9 @@ import (
 
 // Subcommand is a Zas internal subcommand, inspired by the go command.
 type Subcommand struct {
-	// Runs the subcommand
-	// The args are the arguments after the subcommand name.
+	// Run runs the subcommand. It takes no arguments - flags are package
+	// globals wired up in init() - and returns an error instead of
+	// panicking or exiting directly.
 	Run func() error
 
 	// UsageLine is the one-line usage message.

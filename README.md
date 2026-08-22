@@ -1,4 +1,4 @@
-# ![Zas](http://i.imgur.com/e9abWRX.png)
+# ![Zas](https://i.imgur.com/e9abWRX.png)
 
 Most simple static site generator ever.
 
@@ -43,11 +43,11 @@ Yes. Enough. Your delightful site is on .zas/deploy. Enjoy.
 What is happening here? Well, Zas calls the `generate` subcommand by default. This subcommand accepts the following flags:
 
 * `-verbose`: print ALL the things!
-* `-full`: generate all the input files. By default, it has an incremental mode that keeps source and deploys directories in sync.
+* `-full`: generate all the input files. By default, it has an incremental mode that keeps source and deploys directories in sync - it also picks up changes to `layout.html`, `config.yml`, `i18n.yml`, and any `.zas.yml` in a page's own directory tree, not just the page's own source. One gap: a page pulling in another file via `<embed>` is not regenerated when only the embedded file changes - use `-full` after editing an embedded file.
 
 ## Configuration and extension
 
-Zas is like water. It can flow, or it can cr... Nah, Zas doesn't crash (please fill an issue if it does).
+Zas is like water. It can flow, or it can cr... Nah, Zas doesn't crash (please file an issue if it does).
 
 Everything is configurable at .zas/config.yml. It is initialized with default values every time you create a repository. Beware, it happens every time you execute init.
 
@@ -82,7 +82,7 @@ Also, plugins are free to use `.zas` directory for their own needs. I recommend 
 .zas
 +-- plugins
 |   +-- github.com
-|       +-- imdario
+|       +-- darccio
 |           +-- myplugin
 +-- ...    
 ```
@@ -194,7 +194,7 @@ Keep in mind that any file will be treated as a Go text template before any furt
 * `{{.FirstTitle}}`: the file's first H1 header text, before any `title` override is applied - what `{{.Title}}` falls back to. Same best-effort preview behavior as `{{.Page}}` when used from inside a page's own content, with one more guard: if the H1 itself is written as `<h1>{{.Title}}</h1>`, the preview is deliberately left unavailable there instead of echoing the literal, unexecuted `{{.Title}}` text back into itself.
 * `{{.Directory}}`: YAML map from above (up to project's directory) or current directory's `.zas.yml` file. It is optional.
 * `{{.URL}}`: full URL for this file.
-* `{{.Extra /path/}}`: direct access to map holding `.zas/config.yml` as it is. You can access to any value with its full path. E.g. BaseURL is also available as `/site/baseurl`.
+* `{{.Extra "/path/"}}`: direct access to map holding `.zas/config.yml` as it is. You can access to any value with its full path. E.g. BaseURL is also available as `/site/baseurl`.
 * `{{.Resolve id}}`: indirect access to site, directory and page config. It works with simple keys (no paths), checking for them in page, directory and site config (as `/site/<id>`), in this order.
 * `{{.Language}}`: file current language, if defined in the first comment (as YAML property `language`). By default, `/site/language` value.
 * `{{.E "Some key"}}`: translates a string for the page's resolved language (see I18N below), falling back to `**Some key**` when no translation is found. Takes optional `fmt.Sprintf`-style arguments: `{{.E "Hello, %s" .Name}}`.
@@ -270,7 +270,7 @@ One consequence of that first, page-only parse: HTML5 places a `<script>`, `<met
 
 ## 你会说普通话?
 
-對不起。T我不会说普通话。That's all my Chinese! If you are here, I guess you will enjoy I18N support in Zas.
+對不起。我不会说普通话。That's all my Chinese! If you are here, I guess you will enjoy I18N support in Zas.
 
 ### I18N?
 
@@ -347,7 +347,7 @@ If I can help you, you have an idea or you are using Zas in your projects, don't
 
 ## About
 
-Written by [Dario Castañé](http://dario.im).
+Written by [Dario Castañé](https://dario.cat).
 
 ## License
 
