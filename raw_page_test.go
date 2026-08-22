@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
 // utf16leBOM prepends a UTF-16LE byte-order mark and encodes s as
@@ -244,7 +244,7 @@ func newRenderTestGeneratorWithTitleLayout(t *testing.T) *Generator {
 	}
 	gen := &Generator{
 		Config: ConfigSection{"zas": ConfigSection{"deploy": "deploy"}},
-		I18n:   &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		I18n:   &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	layout, err := thtml.New("layout").Funcs(helpers).Parse(`<head><title>{{.Title}}</title></head><body>{{.Body}}</body>`)
 	if err != nil {

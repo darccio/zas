@@ -9,7 +9,7 @@ import (
 	"testing"
 	ttext "text/template"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
 // text/template only exposes pointer-receiver methods (Title, URL, E, H,
@@ -52,7 +52,7 @@ func TestZasDataPointerMethodsNeedAddressableValue(t *testing.T) {
 func TestNewZasDataBuildsForwardSlashPath(t *testing.T) {
 	gen := &Generator{
 		Config: ConfigSection{},
-		I18n:   &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		I18n:   &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	data := NewZasData(filepath.Join("sub", "page.html"), gen)
 	if want := "/sub/page.html"; data.Path != want {
@@ -70,7 +70,7 @@ func TestRenderPageBodyCanCallPointerReceiverMethod(t *testing.T) {
 			"zas":  ConfigSection{"deploy": "deploy"},
 			"site": ConfigSection{"baseurl": "http://example.com"},
 		},
-		I18n: &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		I18n: &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	layout, err := thtml.New("layout").Funcs(helpers).Parse(`{{.Body}}`)
 	if err != nil {
@@ -118,7 +118,7 @@ func testExtractPageConfigTitleOverride(t *testing.T, source string) {
 		Config: ConfigSection{
 			"zas": ConfigSection{"deploy": "deploy"},
 		},
-		I18n: &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		I18n: &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	layout, err := thtml.New("layout").Funcs(helpers).Parse(`{{.Title}}`)
 	if err != nil {

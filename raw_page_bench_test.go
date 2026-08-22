@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
 // largeBody is the body every "large" case below shares: big enough that a
@@ -87,7 +87,7 @@ func newRenderBenchGenerator(b *testing.B) *Generator {
 	}
 	gen := &Generator{
 		Config: ConfigSection{"zas": ConfigSection{"deploy": "deploy"}},
-		I18n:   &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		I18n:   &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	layout, err := thtml.New("layout").Funcs(helpers).Parse(`<body>{{.Body}}</body>`)
 	if err != nil {

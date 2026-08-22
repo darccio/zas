@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 )
 
 // Coverage for the "publish: false" page-config key (upstream issue #15:
@@ -63,7 +63,7 @@ func TestRenderSkipsDeployOutputWhenPublishFalse(t *testing.T) {
 			"zas":  ConfigSection{"deploy": "deploy"},
 			"site": ConfigSection{"baseurl": "http://example.com"},
 		},
-		I18n: &gt.Build{Index: gt.Strings{}, Origin: "en"},
+		I18n: &i18n.Build{Index: i18n.Strings{}, Origin: "en"},
 	}
 	layout, err := thtml.New("layout").Funcs(helpers).Parse(`{{.Body}}`)
 	if err != nil {

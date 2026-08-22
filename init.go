@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 
 	"dario.cat/mergo"
-	"github.com/melvinmt/gt"
+	"github.com/darccio/zas/internal/i18n"
 	yaml "go.yaml.in/yaml/v3"
 )
 
@@ -87,28 +87,28 @@ func NewConfig() (ConfigSection, error) {
 
 // NewI18n loads I18nFile (as defined in constants.go).
 // It must be a YAML file.
-func NewI18n(mainlang string) (i18n gt.Strings, err error) {
+func NewI18n(mainlang string) (strs i18n.Strings, err error) {
 	data, err := os.ReadFile(I18nFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return make(gt.Strings), nil
+			return make(i18n.Strings), nil
 		}
 		return nil, err
 	}
-	i18n = make(gt.Strings)
-	if err = yaml.Unmarshal(data, &i18n); err != nil {
+	strs = make(i18n.Strings)
+	if err = yaml.Unmarshal(data, &strs); err != nil {
 		return nil, err
 	}
-	for k, v := range i18n {
+	for k, v := range strs {
 		if v == nil {
 			v = make(map[string]string)
-			i18n[k] = v
+			strs[k] = v
 		}
 		if _, ok := v[mainlang]; !ok {
 			v[mainlang] = k
 		}
 	}
-	return i18n, nil
+	return strs, nil
 }
 
 // GetString returns a string value from current section, or "" if key is
@@ -194,12 +194,35 @@ func (cs ConfigSection) GetZStringSlice(key string) []string {
 	return s.GetStringSlice(key)
 }
 
+// defaultLayout is the minimal html/template document scaffolded as
+// LayoutFile by Init.Run: just enough for "zas init && zas" to succeed
+// standalone, matching the README's quickstart. Modeled on the smallest
+// layouts under testdata (e.g. testdata/walk-error-base/.zas/layout.html),
+// it renders each page's title and body and nothing else - it's a
+// starting point, not a real design.
+const defaultLayout = `<!DOCTYPE html>
+<html>
+<head><title>{{.Title}}</title></head>
+<body>
+{{.Body}}
+</body>
+</html>
+`
+
 // Init implements the "init" subcommand, which scaffolds a new Zas
 // repository in the current directory.
-type Init struct{}
+type Init struct {
+	// Force, when true, makes Run overwrite an existing ConfigFile or
+	// LayoutFile with its scaffolded default. When false (the default),
+	// Run leaves either file alone if it already exists, so re-running
+	// "zas init" on a site never silently discards hand-edited content.
+	Force bool
+}
 
-// Run scaffolds Dir and writes a default ConfigFile, overwriting
-// any existing one.
+// Run scaffolds Dir, and writes a default ConfigFile and LayoutFile.
+// Without Force set, an existing ConfigFile or LayoutFile is left
+// untouched (Run says so rather than staying silent about it); with
+// Force set, both are overwritten unconditionally.
 func (i *Init) Run() error {
 	path, err := filepath.Abs(Dir)
 	if err != nil {
@@ -213,11 +236,29 @@ func (i *Init) Run() error {
 	} else {
 		fmt.Printf("Reinitialized existing %s repository in %s\n", DisplayName, path)
 	}
-	// Stores DefaultConfig() as ConfigFile (as defined in
-	// constants.go). Overwrites every time we invoke the init subcommand.
-	data, err := yaml.Marshal(DefaultConfig())
+	config, err := yaml.Marshal(DefaultConfig())
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(ConfigFile, data, DefaultFilePerm)
+	if err := i.writeScaffold(ConfigFile, config); err != nil {
+		return err
+	}
+	return i.writeScaffold(LayoutFile, []byte(defaultLayout))
+}
+
+// writeScaffold writes data to path, creating or overwriting it, unless
+// path already exists and Force is false - in which case it leaves the
+// existing file untouched and prints that it did, instead of silently
+// discarding whatever is there.
+func (i *Init) writeScaffold(path string, data []byte) error {
+	if !i.Force {
+		switch _, statErr := os.Stat(path); {
+		case statErr == nil:
+			fmt.Printf("%s already exists, not overwriting (use -force to overwrite)\n", path)
+			return nil
+		case !os.IsNotExist(statErr):
+			return statErr
+		}
+	}
+	return os.WriteFile(path, data, DefaultFilePerm)
 }
