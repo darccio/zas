@@ -185,6 +185,16 @@ Keep in mind that any file will be treated as a Go text template before any furt
 * `{{.Extra /path/}}`: direct access to map holding `.zas/config.yml` as it is. You can access to any value with its full path. E.g. BaseURL is also available as `/site/baseurl`.
 * `{{.Resolve id}}`: indirect access to site, directory and page config. It works with simple keys (no paths), checking for them in page, directory and site config (as `/site/<id>`), in this order.
 * `{{.Language}}`: file current language, if defined in the first comment (as YAML property `language`). By default, `/site/language` value.
+* `{{.E "Some key"}}`: translates a string for the page's resolved language (see I18N below), falling back to `**Some key**` when no translation is found. Takes optional `fmt.Sprintf`-style arguments: `{{.E "Hello, %s" .Name}}`.
+* `{{.H "Some key"}}`: like `{{.E}}`, but the translation is marked as trusted HTML rather than plain text - see the escaping note right below for what that means and where it matters.
+
+#### A page's own content has no escaping at all
+
+A page's own content runs through Go's `text/template`, not `html/template` - this matters, and it's not an accident. Escaping-by-context (the thing `html/template` does) needs to understand the surrounding HTML structure at parse time, but a page's raw source usually isn't HTML yet when its template executes: it might be Markdown, and even an `.html` page is normally just a body fragment, not a full document. `text/template` sidesteps that by doing plain text substitution with no escaping whatsoever, which is also what lets a page inject real markup through a field or method - a translation containing a link, a config value that's meant to become an `<img>` tag - without a `noescape`-style helper. `{{.E}}` and `{{.H}}` above look distinct, but from inside a page they're identical: neither escapes anything, ever.
+
+`layout.html`, by contrast, is a single, fixed template that only ever runs once, over the already-finished page - `html/template` fits there, so that's what it uses (see "What about layout.html?" below), with `noescape`/`{{.H}}` as the deliberate opt-out. The result is that the exact same expression behaves completely differently depending on where you write it: `{{.E "greeting"}}` auto-escapes in `layout.html` but not inside a page's own Markdown or HTML.
+
+None of this matters if you're the only one writing your site's content and config - a static site generator has no runtime attacker separate from its own author. It matters if you ever generate from content you don't fully control - an external contribution, a value pulled from somewhere you don't trust - since anything reaching a page through `{{.Extra}}`, `{{.Resolve}}`, `{{.E}}`/`{{.H}}`, or any other field lands in deployed output completely unescaped, with no equivalent of `layout.html`'s protection available inside a page.
 
 If a file's own content needs to contain literal `{{...}}` - a Vue/Angular/Handlebars snippet, Go template documentation, or a code sample showing off Zas's own template syntax - set `template: false` in its config comment instead of escaping every brace:
 
@@ -209,7 +219,7 @@ It is plain HTML. No frills. Just add a placeholder `{{.Body}}` in your template
 
 First header level 1 from Markdown files will be made available as `{{.Title}}`, unless it is overridden.
 
-`layout.html` is parsed with Go's `html/template`, which auto-escapes values by default. A `noescape` helper is available if you need to output a string as trusted, unescaped HTML - e.g. `{{noescape .SomeTrustedHTML}}`. Only use it on content you trust: passing it anything that could contain attacker-controlled input (a value from user-submitted content, an untrusted third-party feed, etc.) reintroduces the XSS risk `html/template` exists to prevent. If you don't need it, don't use it.
+`layout.html` is parsed with Go's `html/template`, which auto-escapes values by default - unlike a page's own content, which has none at all (see "A page's own content has no escaping at all" above). A `noescape` helper is available if you need to output a string as trusted, unescaped HTML - e.g. `{{noescape .SomeTrustedHTML}}`. Only use it on content you trust: passing it anything that could contain attacker-controlled input (a value from user-submitted content, an untrusted third-party feed, etc.) reintroduces the XSS risk `html/template` exists to prevent. If you don't need it, don't use it.
 
 ### But... I want to do pages beyond post-like format
 
@@ -308,6 +318,8 @@ Your `.zas.yml` will look like this, i.e. for Russian (ru):
 ```yaml
 language: ru
 ```
+
+Then use `{{.E "Main page"}}` anywhere - a page's own content or `layout.html` - to get the translated string for that page's resolved language.
 
 ## Roadmap
 
