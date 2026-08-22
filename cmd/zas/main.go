@@ -41,13 +41,13 @@ var subcommands = []*zas.Subcommand{
 }
 
 var (
-	verbose, full *bool
-	cmdInit       = zas.NewSubcommand("init - create a new Zas site in the current directory", func() error {
+	verbose, full, noPlugins *bool
+	cmdInit                  = zas.NewSubcommand("init - create a new Zas site in the current directory", func() error {
 		i := zas.Init{}
 		return i.Run()
 	})
 	cmdGenerate = zas.NewSubcommand("generate - render the site from source into the deploy directory", func() error {
-		return zas.NewGenerator(*verbose, *full).Run()
+		return zas.NewGenerator(*verbose, *full, *noPlugins).Run()
 	})
 	// cmdHelp and cmdVersion get their Run funcs wired up in init() below,
 	// rather than inline here: both printUsage and printVersion end up
@@ -63,6 +63,7 @@ var (
 func init() {
 	verbose = cmdGenerate.Flag.Bool("verbose", false, "Verbose output")
 	full = cmdGenerate.Flag.Bool("full", false, "Full generation (non-incremental mode)")
+	noPlugins = cmdGenerate.Flag.Bool("no-plugins", false, "Disable content-triggered MIME-type plugin execution (see README's \"Plugins\" section)")
 
 	cmdHelp.Run = func() error {
 		printUsage(os.Stdout)

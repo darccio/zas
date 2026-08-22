@@ -113,12 +113,13 @@ var markdownConverter = markdown.New(
 	),
 )
 
-// NewGenerator returns a Generator ready to Run with the given verbosity
-// and full-generation settings.
-func NewGenerator(verbose, full bool) *Generator {
+// NewGenerator returns a Generator ready to Run with the given verbosity,
+// full-generation, and plugin-execution settings.
+func NewGenerator(verbose, full, noPlugins bool) *Generator {
 	return &Generator{
-		Verbose: verbose,
-		Full:    full,
+		Verbose:   verbose,
+		Full:      full,
+		NoPlugins: noPlugins,
 	}
 }
 
@@ -131,6 +132,17 @@ type Generator struct {
 	Verbose bool
 	// Full generation (non-incremental mode).
 	Full bool
+	// NoPlugins disables content-triggered MIME-type plugin execution (see
+	// handleMIMETypePlugin): an embed that resolves to an external plugin
+	// fails with a clear per-page error instead of exec'ing anything. It
+	// has no effect on zas's own internal embed handlers (Markdown, Plain,
+	// Html), which never spawn a process, or on the separate zs<name>
+	// subcommand-plugin mechanism cmd/zas dispatches directly from argv -
+	// that path only ever fires from a name the invoking user typed
+	// themselves, not from site content. Set this when generating from
+	// content you don't fully control (see README's "Plugins" section for
+	// the full trust model this guards).
+	NoPlugins bool
 	// Config holds the site configuration. Run always overwrites it with
 	// the freshly loaded contents of ConfigFile, so setting it before
 	// calling Run has no effect on Run itself; it's only meaningful when
@@ -1486,6 +1498,9 @@ func (gen *Generator) handleMIMETypePlugin(e *goquery.Selection) error {
 	cmdname := gen.resolveMIMETypePlugin(typ)
 	if !pluginNameRe.MatchString(cmdname) {
 		return fmt.Errorf("no valid plugin configured for embed type %q (src %q)", typ, src)
+	}
+	if gen.NoPlugins {
+		return fmt.Errorf("plugin execution disabled (-no-plugins): embed type %q (src %q) needs plugin m%s%s", typ, src, PluginPrefix, cmdname)
 	}
 	cmd := exec.Command(fmt.Sprintf("m%s%s", PluginPrefix, cmdname), src)
 	cmd.Stderr = os.Stderr
