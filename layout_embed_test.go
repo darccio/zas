@@ -55,3 +55,29 @@ func TestGenerateResolvesEmbedInLayoutItself(t *testing.T) {
 		}
 	}
 }
+
+// An <embed> written inside a page's own body now resolves relative to
+// that page's own directory (see TestGenerateEmbedResolvesRelativeToPage),
+// but an <embed> written directly into layout.html is a different case:
+// layout.html is a single, fixed file shared by every page, not content
+// that lives "in" any one page's directory, so its own embeds still
+// resolve against the site root regardless of which page is currently
+// being rendered. This renders "section/index.html" - a page one
+// directory below the site root - through the same layout as
+// TestGenerateResolvesEmbedInLayoutItself and confirms the layout's
+// site-root "footer.html" embed still resolves, rather than the layout
+// handler mistakenly looking for "section/footer.html" (which doesn't
+// exist) and failing the build.
+func TestGenerateLayoutEmbedStaysRootRelativeForSubdirectoryPage(t *testing.T) {
+	newTestSite(t, "layout-embed-site")
+	if err := generate(t); err != nil {
+		t.Fatalf("generate() error = %v, want nil", err)
+	}
+	got := readDeploy(t, "section/index.html")
+	if !strings.Contains(got, "footer from the layout itself") {
+		t.Fatalf("deployed section/index.html = %q, want it to contain the layout's own embedded footer", got)
+	}
+	if !strings.Contains(got, "section content") {
+		t.Fatalf("deployed section/index.html = %q, want it to contain the page's own content", got)
+	}
+}

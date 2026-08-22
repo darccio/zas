@@ -174,3 +174,75 @@ func TestGenerateRejectsEmbedEscapingSiteRootViaTraversal(t *testing.T) {
 	}
 	assertDeployMissing(t, "leak.html")
 }
+
+// A page-body embed now resolves relative to the embedding page's own
+// directory (see embed_page_relative_test.go) rather than always the site
+// root, so containment has to keep working against that new base too: a
+// "../" sequence deep enough to walk past the site root itself must still
+// be rejected, even though it's now relative to the page's own
+// subdirectory instead of the root the old, pre-page-relative code always
+// used as its base.
+func TestGenerateRejectsPageRelativeEmbedEscapingSiteRoot(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "site")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	copyFixture(t, "site", root)
+	t.Chdir(root)
+
+	if err := os.WriteFile(filepath.Join(base, "secret.txt"), []byte("do not leak"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir("section", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// "section/leak.html" is one directory below the site root, so a
+	// single ".." from there reaches the root itself (see the companion
+	// success case below) - a second ".." is what walks past it into base,
+	// where secret.txt lives.
+	leak := `<embed src="../../secret.txt" type="text/plain">` + "\n"
+	if err := os.WriteFile(filepath.Join("section", "leak.html"), []byte(leak), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := generate(t); err == nil {
+		t.Fatal(`generate() with "section/leak.html" embedding "../../secret.txt": want error, got nil`)
+	}
+	assertDeployMissing(t, "section/leak.html")
+}
+
+// Companion to the rejection above: a page-relative "../" that stays
+// inside the site root (here, one level up from "section/" lands exactly
+// on the root) must still be allowed - containment rejects paths that
+// escape the site root, not every ".." on principle, the same way a
+// relative link in a deployed browser page can legitimately walk up to a
+// shared sibling directory.
+func TestGenerateAllowsPageRelativeEmbedOneLevelUpStillInsideRoot(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "site")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	copyFixture(t, "site", root)
+	t.Chdir(root)
+
+	if err := os.WriteFile("shared.txt", []byte("shared content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir("section", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	reader := "<!-- title: Reader -->\n" + `<embed src="../shared.txt" type="text/plain">` + "\n"
+	if err := os.WriteFile(filepath.Join("section", "reader.html"), []byte(reader), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := generate(t); err != nil {
+		t.Fatalf(`generate() with "section/reader.html" embedding "../shared.txt": error = %v, want nil`, err)
+	}
+	got := readDeploy(t, "section/reader.html")
+	if !strings.Contains(got, "shared content") {
+		t.Fatalf("deployed section/reader.html = %q, want it to contain %q", got, "shared content")
+	}
+}

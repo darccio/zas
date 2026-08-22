@@ -78,6 +78,23 @@ type ZasData struct {
 	// Tracks embed nesting depth for this render, guarding against a self-
 	// or mutually-embedding file recursing without bound.
 	embedDepth int
+	// Directory (relative to the site root, or absolute once a nested embed
+	// has narrowed it further) that the next <embed src="..."> encountered
+	// in this page's own body should resolve against. NewZasData seeds this
+	// to the rendered page's own directory, so an embed written inside a
+	// subdirectory page resolves relative to that subdirectory, the same
+	// way a relative <img src>/<a href> would once the page is deployed and
+	// viewed in a browser - see resolveEmbedSrc in generate.go. Markdown
+	// and Html save and restore this around their own recursive
+	// parseAndReplace call so a chain of embeds each resolves relative to
+	// the file that embedded it, not the outermost page. Generate
+	// overrides it back to the site root before its own parseAndReplace
+	// pass, since any <embed> still unresolved at that point was written
+	// directly into layout.html - a single, fixed file shared by every
+	// page - rather than into this page's own content, and layout-level
+	// embeds (e.g. a site-wide footer) intentionally keep resolving
+	// site-root-relative regardless of which page is currently rendering.
+	embedBaseDir string
 }
 
 // ZasSiteData is the site configuration.
@@ -207,6 +224,11 @@ func NewZasData(srcPath string, gen *Generator) (data ZasData) {
 	// hardcoded "/"-separated comparisons below, so a language-prefixed
 	// home page can still be recognized as one there too).
 	data.Path = "/" + filepath.ToSlash(srcPath)
+	// srcPath (not data.Path) here: it still has the OS's own separator,
+	// which is what resolveEmbedSrc's filepath.Join expects, and its
+	// directory portion is identical either way - swapExtension above only
+	// ever rewrites the final path component's extension.
+	data.embedBaseDir = filepath.Dir(srcPath)
 	data.config = gen.Config
 	// Each ZasData gets its own gt.Build sharing the (read-only, post-init)
 	// Index, so per-render SetTarget/Translate calls don't race or bleed

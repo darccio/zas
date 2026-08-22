@@ -1,0 +1,1 @@
+<p>partial footer</p>

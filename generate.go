@@ -389,6 +389,17 @@ func (gen *Generator) Generate(_ string, data *ZasData) (err error) {
 	// parse. headRendered (see headFate) reflects that this pass, unlike
 	// every other parseAndReplace call, produces the document whose <head>
 	// actually reaches deployed output.
+	//
+	// Any <embed> this pass finds was necessarily written directly into
+	// layout.html: render's own pass already resolved and spliced away
+	// every embed that was in the page's own body. layout.html is a
+	// single, fixed file shared by every page rather than page content
+	// itself, so unlike a page-body embed its src still resolves against
+	// the site root here, matching how it already worked before
+	// page-relative resolution existed (see
+	// TestGenerateResolvesEmbedInLayoutItself, whose fixture places a
+	// shared footer at the site root, not next to layout.html).
+	data.embedBaseDir = "."
 	doc, err := gen.parseAndReplace(&processed, data, headRendered)
 	if err != nil {
 		return
@@ -1371,17 +1382,31 @@ func (gen *Generator) copy(dstPath, srcPath string) (err error) {
 
 // resolveEmbedSrc resolves an <embed src="..."> attribute to an absolute
 // path and rejects any result that falls outside the site root - the
-// process's current directory, the same base every embed src is already
-// read relative to (see walk's use of "." and BuildDeployPath). Without
-// this check, an absolute src or a "../" traversal in site content lets a
-// page pull the contents of any file the build process can read into the
-// published output.
-func (gen *Generator) resolveEmbedSrc(src string) (string, error) {
+// process's current directory, the same base every embed src not resolved
+// against baseDir is still ultimately read relative to (see walk's use of
+// "." and BuildDeployPath). Without this check, an absolute src or a "../"
+// traversal in site content lets a page pull the contents of any file the
+// build process can read into the published output.
+//
+// A relative src is resolved against baseDir first (an empty baseDir means
+// the site root, matching this function's own behavior before callers
+// started passing ZasData.embedBaseDir). An absolute src ignores baseDir
+// entirely and is resolved as-is: joining it onto baseDir would silently
+// turn a should-be-rejected absolute path into a baseDir-relative one
+// instead of rejecting it below.
+func (gen *Generator) resolveEmbedSrc(baseDir, src string) (string, error) {
 	root, err := filepath.Abs(".")
 	if err != nil {
 		return "", err
 	}
-	target, err := filepath.Abs(src)
+	joined := src
+	if !filepath.IsAbs(src) {
+		if baseDir == "" {
+			baseDir = "."
+		}
+		joined = filepath.Join(baseDir, src)
+	}
+	target, err := filepath.Abs(joined)
 	if err != nil {
 		return "", err
 	}
@@ -1398,7 +1423,7 @@ func (gen *Generator) resolveEmbedSrc(src string) (string, error) {
 // Markdown embeds a Markdown file.
 func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
-		resolved, err := gen.resolveEmbedSrc(src)
+		resolved, err := gen.resolveEmbedSrc(data.embedBaseDir, src)
 		if err != nil {
 			return err
 		}
@@ -1410,7 +1435,14 @@ func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *
 		if err := markdownConverter.Convert(mdInput, &b); err != nil {
 			return err
 		}
+		// Any <embed> inside the file just read resolves relative to that
+		// file's own directory, not data's outer page - restored once this
+		// call returns so a sibling embed later in the outer page's own
+		// body still resolves against the outer page again.
+		restore := data.embedBaseDir
+		data.embedBaseDir = filepath.Dir(resolved)
 		mdDoc, err := gen.parseAndReplace(&b, data, headDropped)
+		data.embedBaseDir = restore
 		if err != nil {
 			return err
 		}
@@ -1430,7 +1462,7 @@ func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *
 // Plain embeds a plain text file.
 func (gen *Generator) Plain(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
-		resolved, err := gen.resolveEmbedSrc(src)
+		resolved, err := gen.resolveEmbedSrc(data.embedBaseDir, src)
 		if err != nil {
 			return err
 		}
@@ -1456,7 +1488,7 @@ func (gen *Generator) Plain(e *goquery.Selection, _ *goquery.Document, data *Zas
 // Html embeds a HTML file.
 func (gen *Generator) Html(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
-		resolved, err := gen.resolveEmbedSrc(src)
+		resolved, err := gen.resolveEmbedSrc(data.embedBaseDir, src)
 		if err != nil {
 			return err
 		}
@@ -1465,8 +1497,13 @@ func (gen *Generator) Html(e *goquery.Selection, _ *goquery.Document, data *ZasD
 		if err != nil {
 			return err
 		}
+		// Same save/restore as Markdown above: an <embed> inside the file
+		// just read resolves relative to that file's own directory.
+		restore := data.embedBaseDir
+		data.embedBaseDir = filepath.Dir(resolved)
 		var htmlDoc *goquery.Document
 		htmlDoc, err = gen.parseAndReplace(bytes.NewBuffer(input), data, headDropped)
+		data.embedBaseDir = restore
 		if err != nil {
 			return err
 		}

@@ -260,7 +260,11 @@ What does it mean? It means you can have .html files with embedded markdown file
 
 Zas still reads and processes `navigation.md` normally wherever it's embedded, but it won't also show up on its own at `/navigation.html` in the deploy output.
 
-`<embed>` also works directly inside `layout.html` itself, not just inside a page's own body - useful for something every page shares, like a site-wide footer.
+An `<embed>`'s `src` written inside a page's own body resolves relative to that page's own directory - the same way a relative `<img src>`/`<a href>` would once the page is deployed and viewed in a browser. So a page at `section/index.html` embedding `<embed src="navigation.md" ...>` looks for `section/navigation.md`, not a `navigation.md` at the site root, even if one happens to exist there too. A leading `../` is allowed as long as it still lands inside the site: `<embed src="../shared.md" ...>` from `section/index.html` reaches a `shared.md` at the site root, but nothing can be made to resolve outside the site root itself, however many `../` it uses.
+
+`<embed>` also works directly inside `layout.html` itself, not just inside a page's own body - useful for something every page shares, like a site-wide footer. This case is different: `layout.html` is a single, fixed file shared by every page rather than page content that lives in a particular directory, so an embed written there always resolves relative to the site root, regardless of which page is currently being rendered.
+
+Note that this is specific to Zas's own built-in embed handlers (`Markdown`, `Plain`, `Html` - the ones `mimetypes:` maps a `text/*` type to by default). An `mzs*` MIME type plugin (see "MIME type plugins" above) still receives its `src` argument exactly as written in `<embed src="...">`, with no resolution applied at all - the plugin decides for itself how to interpret it.
 
 #### A note on output vs. source
 
