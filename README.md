@@ -347,7 +347,7 @@ If I can help you, you have an idea or you are using Zas in your projects, don't
 
 ## About
 
-Written by [Dario Castañé](https://dario.im).
+Written by [Dario Castañé](https://dario.cat).
 
 ## License
 
