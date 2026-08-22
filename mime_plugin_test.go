@@ -87,3 +87,36 @@ func TestHandleMIMETypePluginRejectsPathSeparator(t *testing.T) {
 		t.Fatalf("error = %v, want the name rejected before exec", err)
 	}
 }
+
+func TestHandleMIMETypePluginNoPluginsRefusesToExec(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script plugin stub is not portable to windows")
+	}
+	bin := t.TempDir()
+	script := "#!/bin/sh\necho '<b>ok</b>'\n"
+	if err := os.WriteFile(filepath.Join(bin, "mzstest"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	gen := &Generator{
+		NoPlugins: true,
+		Config: ConfigSection{
+			"mimetypes": ConfigSection{"text/x-test": "test"},
+		},
+	}
+	doc := newEmbedDoc(t, "x", "text/x-test")
+	err := gen.handleMIMETypePlugin(doc.Find("embed"))
+	if err == nil {
+		t.Fatal("handleMIMETypePlugin() with NoPlugins set: want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "-no-plugins") {
+		t.Fatalf("error = %v, want it to mention -no-plugins", err)
+	}
+	// The binary really is on PATH and would have worked (see
+	// TestHandleMIMETypePluginRunsExternalCommand) - NoPlugins must refuse
+	// before exec, not because the plugin was otherwise unusable.
+	if doc.Find("embed").Length() != 1 {
+		t.Fatal("embed tag was replaced despite NoPlugins - plugin executed anyway")
+	}
+}

@@ -117,6 +117,15 @@ Maybe you are asking yourself: "Where is mzsmarkdown?". Nowhere! It is a particu
 
 If you develop a new plugin, please contact me, and I will list it here :) Please, keep in mind: make it [idempotent](http://en.wikipedia.org/wiki/Idempotence).
 
+#### Plugin trust model
+
+Both plugin mechanisms resolve a name to a binary on `PATH` and execute it - Zas does no sandboxing, signing, or verification of what it finds there. That's a deliberate design, in the same spirit as how `git <subcommand>` resolves to `git-<subcommand>` on `PATH`, but it's worth being explicit about the two different ways a plugin name gets chosen:
+
+- **`zas <name>` subcommand plugins** are only ever invoked from a name you (or a script you wrote) typed directly as a command-line argument - the same trust level as running any other program by name in your shell.
+- **`mzs*` MIME type plugins** are chosen by `mimetypes:` config and triggered by `<embed type="...">` tags found in site *content*. If you ever run `zas generate` over content you don't fully control - a preview build from an external contribution, for example - that content effectively gets to pick which already-installed plugin binary runs, with the embed's `src` as an argument.
+
+If that second case applies to you, pass `-no-plugins` to `zas generate`: any embed that would need an external MIME type plugin fails with a clear error instead of executing anything (Zas's own built-in embed handlers, like Markdown, aren't affected - they never spawn a process).
+
 ## Building sites
 
 Your site layout will look like this:
