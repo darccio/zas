@@ -57,14 +57,15 @@ const (
 	DefaultFilePerm os.FileMode = 0o644
 )
 
-// ConfigFile and I18nFile are a site's config and i18n file paths, relative
-// to its root. They can't be Go constants because filepath.Join isn't a
-// constant expression - but building them with filepath.Join, rather than
-// hand-concatenating with "/", is what keeps them correct on Windows, where
-// the OS path separator is "\\".
+// ConfigFile, I18nFile and LayoutFile are a site's config, i18n and default
+// layout file paths, relative to its root. They can't be Go constants
+// because filepath.Join isn't a constant expression - but building them
+// with filepath.Join, rather than hand-concatenating with "/", is what
+// keeps them correct on Windows, where the OS path separator is "\\".
 var (
 	ConfigFile = filepath.Join(Dir, "config.yml")
 	I18nFile   = filepath.Join(Dir, "i18n.yml")
+	LayoutFile = filepath.Join(Dir, "layout.html")
 )
 
 // defaultConfig is the built-in configuration merged into every site's own
@@ -74,7 +75,7 @@ var (
 // mutate it (or one of its nested section maps) through the returned value.
 var defaultConfig = ConfigSection{
 	Name: ConfigSection{
-		"layout": filepath.Join(Dir, "layout.html"),
+		"layout": LayoutFile,
 		"deploy": filepath.Join(Dir, "deploy"),
 	},
 	"site": ConfigSection{

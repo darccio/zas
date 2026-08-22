@@ -32,7 +32,7 @@ Go to your site's directory and do:
 zas init
 ```
 
-Zas will create a `.zas` directory with sane defaults. Put your layout in `.zas/layout.html`, and you are good to go.
+Zas will create a `.zas` directory with sane defaults, including a starter `.zas/layout.html` - replace it with your own whenever you like.
 
 ```sh
 zas
@@ -49,7 +49,7 @@ What is happening here? Well, Zas calls the `generate` subcommand by default. Th
 
 Zas is like water. It can flow, or it can cr... Nah, Zas doesn't crash (please file an issue if it does).
 
-Everything is configurable at .zas/config.yml. It is initialized with default values every time you create a repository. Beware, it happens every time you execute init.
+Everything is configurable at .zas/config.yml. It is initialized with default values the first time you run `zas init`; running it again leaves an existing config.yml (and layout.html) alone unless you pass `-force`, which overwrites both with their defaults.
 
 You can override the `site` config section in two ways:
 
