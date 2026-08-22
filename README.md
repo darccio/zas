@@ -72,7 +72,7 @@ $ zas hello World
 Hello World!
 ```
 
-That's all. Zas passes any command-line argument after subcommand name to `zshello`.
+That's all. Zas passes any command-line argument after subcommand name to `zshello`. (The same `zshello` binary is also reachable from page content - see the script tag mechanism below.)
 
 **Beware:** Zas won't pass any configuration information. Plugins are responsible for reading configuration, even from directory and page levels. Helper libraries in different languages are welcome!
 
@@ -87,15 +87,24 @@ Also, plugins are free to use `.zas` directory for their own needs. I recommend 
 +-- ...    
 ```
 
-Any `zs` plugin can be invoked through a script tag with type `application/zas+myplugin`. Arguments can be passed with data-args attribute, which content will be used as command-line invoke.
+Any `zs` plugin can also be invoked from page content through a script tag with type `application/zas+myplugin`:
 
 ```html
-<script type="application/zas+myplugin" data-args="arg1 arg2 ... argN"></script>
+<script type="application/zas+myplugin" data-args="arg1 'arg two' arg3">
+  whatever this tag's own content is
+</script>
 ```
 
-The tag is deleted after execution. Any output in stdout will replace the tag.
+The tag is deleted and replaced by whatever the plugin writes to stdout, as HTML. `data-args` supplies argv, split with shell-like quoting - `'single'` and `"double"` quotes group an argument containing spaces, and a backslash escapes the next character - but nothing here is ever handed to an actual shell, so none of `$`, `` ` ``, `*`, `~`, `#`, `|`, `;`, `&`, `<`, `>` are special; they reach the plugin literally.
 
-All plugins will be called in order. Oh, you can even ask for async execution with same-name attribute (hint: async).
+Unlike an `<embed>`, this tag's own inner content isn't parsed as HTML at all: `<script>` is one of the few HTML elements whose content is raw text, so whatever you write between the tags - a JSON object, a CSV table, a block of YAML, anything - survives byte for byte and is piped to the plugin's stdin exactly as written, entities and all. That's the point of reaching for a script tag instead of `embed`/`mzs*`: it lets you write inline data a plugin turns into HTML, rather than only ever pointing at a separate file.
+
+A few things to know:
+
+- **No `async` yet.** Every zas script tag runs synchronously, in document order, one at a time. The tag accepts an `async` attribute, but it's currently ignored.
+- **Placement matters.** In a page's own content, the tag must resolve somewhere in the eventual `<body>` - a leading config comment does *not* stop the parser from placing a script written as the very first thing in a file into `<head>` instead, and Zas will refuse to guess what you meant, failing the build with a clear error instead. Inside `layout.html` specifically, a tag in `<head>` is allowed, but only for output that's actually valid there (`<meta>`, `<link>`, `<base>`, `<style>`, `<title>`) - handy for a plugin that injects per-build metadata into every page's head. Anything else placed in `layout.html`'s `<head>` also fails the build rather than silently vanishing.
+- **Not re-scanned.** A plugin's own output isn't searched for further zas script tags in the same pass - except that a page-body tag's output does get one more look, since the whole assembled page is parsed again to merge it with the layout (see below). A tag written directly into `layout.html` gets no such second pass.
+- Only tags whose `type` starts with `application/zas+` are ever touched. Ordinary JavaScript, `application/ld+json`, or any other `<script>` - anywhere, including inside `layout.html` - is left completely alone.
 
 #### What's the deal with "mzs" prefix? (a.k.a. MIME types plugins)
 
@@ -119,12 +128,15 @@ If you develop a new plugin, please contact me, and I will list it here :) Pleas
 
 #### Plugin trust model
 
-Both plugin mechanisms resolve a name to a binary on `PATH` and execute it - Zas does no sandboxing, signing, or verification of what it finds there. That's a deliberate design, in the same spirit as how `git <subcommand>` resolves to `git-<subcommand>` on `PATH`, but it's worth being explicit about the two different ways a plugin name gets chosen:
+All plugin mechanisms resolve a name to a binary on `PATH` and execute it - Zas does no sandboxing, signing, or verification of what it finds there. That's a deliberate design, in the same spirit as how `git <subcommand>` resolves to `git-<subcommand>` on `PATH`, but it's worth being explicit about the three different ways a plugin name gets chosen, since they carry different levels of trust:
 
-- **`zas <name>` subcommand plugins** are only ever invoked from a name you (or a script you wrote) typed directly as a command-line argument - the same trust level as running any other program by name in your shell.
+- **`zas <name>` subcommands** are only ever invoked from a name you (or a script you wrote) typed directly as a command-line argument - the same trust level as running any other program by name in your shell.
 - **`mzs*` MIME type plugins** are chosen by `mimetypes:` config and triggered by `<embed type="...">` tags found in site *content*. If you ever run `zas generate` over content you don't fully control - a preview build from an external contribution, for example - that content effectively gets to pick which already-installed plugin binary runs, with the embed's `src` as an argument.
+- **`zs*` script-tag plugins** go further still: a `<script type="application/zas+name">` tag in page content picks the exact same `zs<name>` binary the command line would, *and* supplies both its arguments (`data-args`) and its stdin (the tag's own content). Note this means the `zs<name>` binaries themselves are no longer reachable only from something you typed yourself - content can name one directly.
 
-If that second case applies to you, pass `-no-plugins` to `zas generate`: any embed that would need an external MIME type plugin fails with a clear error instead of executing anything (Zas's own built-in embed handlers, like Markdown, aren't affected - they never spawn a process).
+Every plugin name - from `mimetypes:` config or from a script tag's `type` - is validated as a plain `[a-zA-Z0-9_-]+` string before anything is executed, so content can't smuggle in a path (`../../something`) to make `exec.Command` skip `PATH` lookup entirely.
+
+If you run `zas generate` over content you don't fully control, pass `-no-plugins`: any embed needing an external MIME type plugin, or any script tag naming one, fails with a clear error instead of executing anything. This does not cover the `zas <name>` command line itself, which is never content-triggered. Zas's own built-in embed handlers (like `Markdown`) aren't affected either - they never spawn a process.
 
 ## Building sites
 
