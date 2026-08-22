@@ -555,6 +555,43 @@ func pathHasComponent(path, component string) bool {
 	return false
 }
 
+// allowedDotDir reports whether path is a top-level dot-directory the site
+// has explicitly opted back into being walked and deployed, via
+// allowed_dotdirs in the zas config section, e.g.:
+//
+//	zas:
+//	  allowed_dotdirs: [".well-known"]
+//
+// Matching is literal and case-sensitive - no prefix or glob matching - and
+// only ever applies to a directory with no path separator in it: a site's
+// .well-known/ always lives at the root, and a dot-directory nested deeper
+// (e.g. foo/.hidden, or an allowed directory's own dot-prefixed
+// subdirectory) stays pruned regardless of what's configured, the same way
+// it always has. Widening that would let one allowlisted top-level name
+// implicitly vouch for whatever dot-directories happen to live under it,
+// which isn't what a site author opting a single, specific directory in
+// asked for.
+//
+// Dir (".zas") and ".git" can never be allowlisted, however they're spelled
+// in config: .zas already has its own unconditional prune via
+// pathHasComponent below, and .git holds the site's full history and
+// tooling state, which must never end up in deploy output regardless of
+// what a config file says.
+func (gen *Generator) allowedDotDir(path string, info os.FileInfo) bool {
+	if info == nil || !info.IsDir() {
+		return false
+	}
+	if path == Dir || path == ".git" || strings.ContainsRune(path, filepath.Separator) {
+		return false
+	}
+	for _, allowed := range gen.Config.GetZStringSlice("allowed_dotdirs") {
+		if allowed == path {
+			return true
+		}
+	}
+	return false
+}
+
 /*
  * Real walking function. Handles all supported files and copy not supported ones in current deployment path.
  */
@@ -562,7 +599,20 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	if err != nil {
 		return err
 	}
-	if strings.HasPrefix(path, ".") || strings.HasPrefix(filepath.Base(path), ".") || pathHasComponent(path, Dir) ||
+	// Checking only filepath.Base(path) (not the full path) is what makes
+	// this prune dot-directories at whatever depth they occur, including a
+	// nested one like foo/.hidden: filepath.Walk invokes this callback for
+	// every directory on its way down, so foo/.hidden gets its own call,
+	// matches here, and is pruned via SkipDir below before Walk ever
+	// descends into it - foo/.hidden/bar.txt is consequently never visited
+	// at all. This also means an allowed top-level dot-directory's own
+	// contents (e.g. .well-known/security.txt) are free to fall through
+	// this check on their own merits: only .well-known itself needs
+	// allowedDotDir's approval, since nothing beneath a directory that
+	// wasn't pruned ever starts with a dot in its own basename unless it
+	// independently does too.
+	dotPath := strings.HasPrefix(filepath.Base(path), ".") && !gen.allowedDotDir(path, info)
+	if dotPath || pathHasComponent(path, Dir) ||
 		path == gen.GetDeployPath() || path == gen.Config.GetZString("layout") {
 		if path != "." && info.IsDir() {
 			return filepath.SkipDir

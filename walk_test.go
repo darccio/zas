@@ -39,6 +39,101 @@ func TestWalkSkipsHiddenDirectory(t *testing.T) {
 	}
 }
 
+// TestWalkAllowedDotDirNotSkipped is a regression test for the "no escape
+// hatch" gap: a top-level dot-directory explicitly named in the zas
+// section's allowed_dotdirs config must not be pruned, unlike every other
+// dot-prefixed directory.
+func TestWalkAllowedDotDirNotSkipped(t *testing.T) {
+	gen := &Generator{Config: ConfigSection{Name: ConfigSection{"allowed_dotdirs": []interface{}{".well-known"}}}}
+	info, err := os.Stat(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := ".well-known"
+	if err := gen.walk(path, info, nil); err != nil {
+		t.Fatalf("walk(%q) error = %v, want nil", path, err)
+	}
+}
+
+// TestWalkUnlistedDotDirStillSkipped confirms the allowlist is exact: with
+// ".well-known" allowed, an unrelated top-level dot-directory like
+// ".secrets" must still be pruned.
+func TestWalkUnlistedDotDirStillSkipped(t *testing.T) {
+	gen := &Generator{Config: ConfigSection{Name: ConfigSection{"allowed_dotdirs": []interface{}{".well-known"}}}}
+	info, err := os.Stat(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := ".secrets"
+	if err := gen.walk(path, info, nil); !errors.Is(err, filepath.SkipDir) {
+		t.Fatalf("walk(%q) error = %v, want %v", path, err, filepath.SkipDir)
+	}
+}
+
+// TestWalkNestedDotDirStillSkippedEvenIfAllowedAtTopLevel confirms the
+// allowlist only ever applies to a top-level directory: a dot-directory
+// nested under an allowed one (or anywhere else) still gets pruned, so
+// naming a directory in allowed_dotdirs can't be used to reach an
+// arbitrarily deep hidden directory that happens to share its name.
+func TestWalkNestedDotDirStillSkippedEvenIfAllowedAtTopLevel(t *testing.T) {
+	gen := &Generator{Config: ConfigSection{Name: ConfigSection{"allowed_dotdirs": []interface{}{".well-known"}}}}
+	info, err := os.Stat(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(".well-known", ".well-known")
+	if err := gen.walk(path, info, nil); !errors.Is(err, filepath.SkipDir) {
+		t.Fatalf("walk(%q) error = %v, want %v", path, err, filepath.SkipDir)
+	}
+}
+
+// TestWalkGitNeverAllowlistable confirms .git stays pruned unconditionally
+// even if a config file explicitly lists it in allowed_dotdirs.
+func TestWalkGitNeverAllowlistable(t *testing.T) {
+	gen := &Generator{Config: ConfigSection{Name: ConfigSection{"allowed_dotdirs": []interface{}{".git"}}}}
+	info, err := os.Stat(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := ".git"
+	if err := gen.walk(path, info, nil); !errors.Is(err, filepath.SkipDir) {
+		t.Fatalf("walk(%q) error = %v, want %v", path, err, filepath.SkipDir)
+	}
+}
+
+// TestWalkZasDirNeverAllowlistable confirms Dir (".zas") stays pruned
+// unconditionally even if a config file explicitly lists it in
+// allowed_dotdirs.
+func TestWalkZasDirNeverAllowlistable(t *testing.T) {
+	gen := &Generator{Config: ConfigSection{Name: ConfigSection{"allowed_dotdirs": []interface{}{Dir}}}}
+	info, err := os.Stat(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gen.walk(Dir, info, nil); !errors.Is(err, filepath.SkipDir) {
+		t.Fatalf("walk(%q) error = %v, want %v", Dir, err, filepath.SkipDir)
+	}
+}
+
+// TestWalkAllowedDotDirRequiresDirectory confirms the allowlist only ever
+// opts in a directory, not a file that happens to share an allowlisted
+// name.
+func TestWalkAllowedDotDirRequiresDirectory(t *testing.T) {
+	gen := &Generator{Config: ConfigSection{Name: ConfigSection{"allowed_dotdirs": []interface{}{".well-known"}}}}
+	file := filepath.Join(t.TempDir(), "x")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := ".well-known"
+	if err := gen.walk(path, info, nil); err != nil {
+		t.Fatalf("walk(%q) error = %v, want nil", path, err)
+	}
+}
+
 func TestWalkSkipsDeployDirectory(t *testing.T) {
 	gen := &Generator{}
 	info, err := os.Stat(t.TempDir())

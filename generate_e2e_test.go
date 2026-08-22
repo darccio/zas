@@ -246,6 +246,70 @@ func TestGenerateSkipsNestedHiddenDirectory(t *testing.T) {
 	assertDeployMissing(t, ".zas")
 }
 
+// zasConfigWithAllowedDotDirs is testdata/site's own .zas/config.yml (see
+// that fixture) with an allowed_dotdirs entry added under the zas section,
+// for tests exercising the dot-directory allowlist escape hatch.
+const zasConfigWithAllowedDotDirs = `zas:
+  layout: .zas/layout.html
+  deploy: .zas/deploy
+  allowed_dotdirs: [".well-known"]
+site:
+  baseurl: http://example.com
+  language: en
+mimetypes:
+  text/markdown: markdown
+  text/plain: plain
+  text/html: html
+`
+
+// TestGenerateAllowedDotDirIsDeployed is a regression test for the "no
+// escape hatch" gap left after the original dot-directory-pruning fix: a
+// top-level dot-directory named in the zas section's allowed_dotdirs config
+// (here ".well-known", the standard location a site's ACME challenge files
+// and similar well-known resources live in) must actually be walked and
+// deployed, not pruned like every other dot-directory.
+func TestGenerateAllowedDotDirIsDeployed(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.WriteFile(filepath.Join(".zas", "config.yml"), []byte(zasConfigWithAllowedDotDirs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(".well-known", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(".well-known", "security.txt"), []byte("Contact: mailto:security@example.com\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := generate(t); err != nil {
+		t.Fatalf("generate() error = %v, want nil", err)
+	}
+	assertDeployHas(t, filepath.Join(".well-known", "security.txt"))
+	if got := readDeploy(t, filepath.Join(".well-known", "security.txt")); got != "Contact: mailto:security@example.com\n" {
+		t.Fatalf("security.txt = %q, want it copied verbatim", got)
+	}
+}
+
+// TestGenerateUnlistedDotDirStillPrunedWithAllowlistConfigured confirms the
+// allowlist is exact, not a blanket re-enable of dot-directory walking: with
+// ".well-known" allowed, an unrelated top-level dot-directory like
+// ".secrets" must still never reach deploy.
+func TestGenerateUnlistedDotDirStillPrunedWithAllowlistConfigured(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.WriteFile(filepath.Join(".zas", "config.yml"), []byte(zasConfigWithAllowedDotDirs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(".secrets", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(".secrets", "token.txt"), []byte("do-not-deploy\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := generate(t); err != nil {
+		t.Fatalf("generate() error = %v, want nil", err)
+	}
+	assertDeployMissing(t, ".secrets")
+	assertDeployMissing(t, filepath.Join(".secrets", "token.txt"))
+}
+
 // TestGenerateCollidingMDAndHTMLFailsDeterministically is a regression
 // test: a source .md and .html file in the same directory used to both
 // render to the identical deploy output path in concurrent goroutines,
