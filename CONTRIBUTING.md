@@ -98,3 +98,25 @@ dynamically (a loop writing hundreds of files, `os.Chmod` to force a
 permission error, etc.) stays in the test or helper function - a fixture is
 for content a maintainer would want to read as-is, not a place to encode
 logic.
+
+## Releasing
+
+Pushing a tag matching `v*` (e.g. `v0.1.0`) triggers
+`.github/workflows/release.yml`, which runs
+[GoReleaser](https://goreleaser.com) (config in `.goreleaser.yaml`) to build
+`cmd/zas` for linux/darwin/windows on amd64/arm64, archive and checksum the
+binaries, generate a changelog grouped by commit type from the Conventional
+Commits history since the previous tag, and publish all of it as a GitHub
+Release. `zas version`'s own output (see `cmd/zas/main.go`) needs no extra
+wiring for this - it already reads the module version and VCS revision Go's
+toolchain stamps into the binary at build time.
+
+To try the whole pipeline locally without publishing anything, install
+[goreleaser](https://goreleaser.com/install/) and run:
+
+```sh
+goreleaser release --snapshot --skip=publish --clean
+```
+
+This is a plain binary+checksum+changelog release; packaging for a package
+manager (Homebrew, apt, etc.) isn't set up yet.
