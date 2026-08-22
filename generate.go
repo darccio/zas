@@ -668,21 +668,20 @@ func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error)
 		}
 		return err
 	}
-	sourcePath := strings.Replace(path, gen.GetDeployPath(), ".", 1)
-	source, err := os.Open(sourcePath)
-	// TODO it must clean directories too
+	sourcePath := "." + strings.TrimPrefix(path, gen.GetDeployPath())
+	_, err = os.Stat(sourcePath)
 	if err != nil {
 		reap := true
 		if hasExtension(sourcePath, ".html") {
 			// swapExtension always normalizes to's own casing, so this
 			// guess (e.g. "./page.md") can only ever be lowercase,
 			// regardless of what case the real source used - a plain
-			// os.Open here would never find a differently-cased source
+			// os.Stat here would never find a differently-cased source
 			// like "PAGE.MD" on a case-sensitive filesystem. Note this
 			// isn't needed above: an .html-sourced deploy path is never
 			// extension-swapped at all (swapExtension's from is always
 			// ".md"), so it keeps the source's exact original casing, and
-			// plain os.Open above already matches it correctly.
+			// plain os.Stat above already matches it correctly.
 			sourcePath = swapExtension(sourcePath, ".html", ".md")
 			if gen.existsFold(sourcePath) {
 				reap = false
@@ -701,8 +700,6 @@ func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error)
 				gen.reapedDirs[path] = struct{}{}
 			}
 		}
-	} else {
-		_ = source.Close()
 	}
 	return
 }
