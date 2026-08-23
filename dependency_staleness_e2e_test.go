@@ -10,6 +10,10 @@ import (
 
 // End-to-end tests proving sourceIsNewer invalidates pages when a shared
 // dependency changes, not just when the page's own source file does.
+//
+// The embed-related tests below cover embedTargetModTime, the same
+// mechanism's extension to a page's (or layout.html's) own <embed src>
+// targets.
 
 func TestGenerateLayoutChangeInvalidatesEveryPage(t *testing.T) {
 	newTestSite(t, "site")
@@ -186,5 +190,135 @@ func TestGenerateZasYMLScopesInvalidationToItsSubtree(t *testing.T) {
 	}
 	if !aboutBefore.ModTime().Equal(aboutAfter.ModTime()) {
 		t.Fatalf("about.html mtime changed after editing sub/.zas.yml, want unaffected: before=%v after=%v", aboutBefore.ModTime(), aboutAfter.ModTime())
+	}
+}
+
+// TestGenerateEmbedChangeInvalidatesEmbeddingPage proves editing only a
+// page's <embed> target (index.html embeds partials/nav.html in the test
+// fixture) - leaving index.html's own source, layout.html, config.yml,
+// i18n.yml, and any .zas.yml all untouched - still invalidates index.html
+// on the next incremental run.
+func TestGenerateEmbedChangeInvalidatesEmbeddingPage(t *testing.T) {
+	newTestSite(t, "site")
+	ageSources(t, -time.Hour)
+	if err := generate(t); err != nil {
+		t.Fatalf("first generate() error = %v, want nil", err)
+	}
+	if out := readDeploy(t, "index.html"); !strings.Contains(out, "Home</a>") {
+		t.Fatalf("index.html = %q, want it to contain the original embedded nav", out)
+	}
+
+	nav := filepath.Join("partials", "nav.html")
+	data, err := os.ReadFile(nav)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := strings.Replace(string(data), "Home</a>", "Home v2</a>", 1)
+	if updated == string(data) {
+		t.Fatal("test fixture partials/nav.html has no \"Home</a>\" to mark")
+	}
+	if err := os.WriteFile(nav, []byte(updated), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	touchFuture(t, nav)
+
+	if err := generate(t); err != nil {
+		t.Fatalf("second generate() error = %v, want nil", err)
+	}
+	if out := readDeploy(t, "index.html"); !strings.Contains(out, "Home v2</a>") {
+		t.Fatalf("index.html = %q, want it regenerated to reflect the edited embed target", out)
+	}
+}
+
+// TestGenerateLayoutEmbedChangeInvalidatesEveryPage is the layout-level
+// counterpart: an <embed> written directly into layout.html (outside
+// {{.Body}}) resolves against the site root, per Generate's own
+// data.embedBaseDir reset - editing only that embedded file must still
+// invalidate every page, the same way editing layout.html itself does.
+func TestGenerateLayoutEmbedChangeInvalidatesEveryPage(t *testing.T) {
+	newTestSite(t, "site")
+	if err := os.WriteFile("footer.html", []byte(`<footer class="marker">footer-v1</footer>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	layout := filepath.Join(".zas", "layout.html")
+	data, err := os.ReadFile(layout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withEmbed := strings.Replace(string(data), "{{.Body}}", `{{.Body}}<embed src="footer.html" type="text/html">`, 1)
+	if withEmbed == string(data) {
+		t.Fatal("test fixture layout.html has no {{.Body}} to mark")
+	}
+	if err := os.WriteFile(layout, []byte(withEmbed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ageSources(t, -time.Hour)
+	if err := generate(t); err != nil {
+		t.Fatalf("first generate() error = %v, want nil", err)
+	}
+	if out := readDeploy(t, "about.html"); !strings.Contains(out, "footer-v1") {
+		t.Fatalf("about.html = %q, want it to contain the layout's embedded footer", out)
+	}
+
+	if err := os.WriteFile("footer.html", []byte(`<footer class="marker">footer-v2</footer>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	touchFuture(t, "footer.html")
+
+	if err := generate(t); err != nil {
+		t.Fatalf("second generate() error = %v, want nil", err)
+	}
+	for _, page := range []string{"about.html", "index.html", filepath.Join("sub", "page.html")} {
+		if out := readDeploy(t, page); !strings.Contains(out, "footer-v2") {
+			t.Fatalf("%s = %q, want it to reflect the layout's changed embed target", page, out)
+		}
+	}
+}
+
+// TestGenerateTemplatedEmbedSrcNotTrackedForStaleness documents
+// embedTargetModTime's deliberate limitation: an <embed src="{{...}}">
+// whose src is a template action can't be resolved without running the
+// page's own template, so editing only the target doesn't invalidate the
+// embedding page - -full remains the escape hatch for this case, exactly
+// as it did before embed staleness tracking existed at all.
+func TestGenerateTemplatedEmbedSrcNotTrackedForStaleness(t *testing.T) {
+	newTestSite(t, "site")
+	src := "<embed src=\"{{if true}}partials/nav.html{{end}}\" type=\"text/html\">\n"
+	if err := os.WriteFile("templated.md", []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ageSources(t, -time.Hour)
+	if err := generate(t); err != nil {
+		t.Fatalf("first generate() error = %v, want nil", err)
+	}
+	target := filepath.Join(".zas", "deploy", "templated.html")
+	before, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := readDeploy(t, "templated.html"); !strings.Contains(out, "Home</a>") {
+		t.Fatalf("templated.html = %q, want the template-resolved embed to still render at generation time", out)
+	}
+
+	nav := filepath.Join("partials", "nav.html")
+	data, err := os.ReadFile(nav)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(nav, append(data, []byte("<!-- changed -->\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	touchFuture(t, nav)
+
+	if err := generate(t); err != nil {
+		t.Fatalf("second generate() error = %v, want nil", err)
+	}
+	after, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !before.ModTime().Equal(after.ModTime()) {
+		t.Fatalf("templated.html mtime changed after editing a templated embed's target, want it left untracked (documented limitation): before=%v after=%v", before.ModTime(), after.ModTime())
 	}
 }
