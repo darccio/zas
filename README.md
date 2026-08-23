@@ -43,7 +43,7 @@ Yes. Enough. Your delightful site is on .zas/deploy. Enjoy.
 What is happening here? Well, Zas calls the `generate` subcommand by default. This subcommand accepts the following flags:
 
 * `-verbose`: print ALL the things!
-* `-full`: generate all the input files. By default, it has an incremental mode that keeps source and deploys directories in sync - it also picks up changes to `layout.html`, `config.yml`, `i18n.yml`, and any `.zas.yml` in a page's own directory tree, not just the page's own source. One gap: a page pulling in another file via `<embed>` is not regenerated when only the embedded file changes - use `-full` after editing an embedded file.
+* `-full`: generate all the input files. By default, it has an incremental mode that keeps source and deploys directories in sync - it also picks up changes to `layout.html`, `config.yml`, `i18n.yml`, and any `.zas.yml` in a page's own directory tree, not just the page's own source, and it follows a page's (or `layout.html`'s own) `<embed src="...">` targets too, recursively through further `Markdown`/`Html` embeds. Two narrower gaps remain: an `<embed src="{{...}}">` whose `src` is itself a template action can't be resolved without running the page's own template, and an `mzs*` MIME type plugin's `src` file is tracked but whatever else the plugin reads isn't - use `-full` after editing either of those.
 
 ## Configuration and extension
 

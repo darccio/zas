@@ -517,6 +517,9 @@ func (gen *Generator) parseLayout() {
 	layout := gen.Config.GetZString("layout")
 	if info, statErr := os.Stat(layout); statErr == nil {
 		gen.layoutModTime = info.ModTime()
+		if depTime := gen.embedTargetModTime(layout, "."); depTime.After(gen.layoutModTime) {
+			gen.layoutModTime = depTime
+		}
 	}
 	if gen.Layout, err = thtml.New(filepath.Base(layout)).Funcs(helpers).ParseFiles(layout); err != nil {
 		gen.recordErr(err)
@@ -793,7 +796,11 @@ func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
 		return true
 	}
 	_, dirModTime, _ := gen.loadZasDirectoryConfig(path)
-	return !dirModTime.Before(destModTime)
+	if !dirModTime.Before(destModTime) {
+		return true
+	}
+	embedModTime := gen.embedTargetModTime(path, filepath.Dir(path))
+	return !embedModTime.Before(destModTime)
 }
 
 /*
@@ -1465,6 +1472,80 @@ func (gen *Generator) resolveEmbedSrc(baseDir, src string) (string, error) {
 		return "", fmt.Errorf("embed src %q escapes the site root", src)
 	}
 	return target, nil
+}
+
+// embedTargetModTime returns the latest mtime among path's own literal
+// <embed src="..."> targets, recursed the same way the Markdown and Html
+// embed handlers themselves recurse (Plain never re-parses its target, and
+// neither does an external MIME-type plugin, so recursion stops there too).
+// baseDir resolves a relative src exactly like NewZasData/Generate set
+// data.embedBaseDir for path's own render. Two things are deliberately left
+// untracked, both documented in README.md: a templated src (src="{{...}}")
+// requires running path's own template to resolve, which this scan can't do
+// without becoming a second full render, and anything an external
+// MIME-type plugin's src doesn't directly read - the plugin decides that,
+// not zas, so only the src file it's given is stat'd. Cycle- and
+// depth-bounded like parseAndReplace's own maxEmbedDepth/embedDepth. Returns
+// the zero Time if path has no (trackable) embed targets, matching
+// sourceIsNewer's other dependency mtimes' zero-value handling.
+func (gen *Generator) embedTargetModTime(path, baseDir string) time.Time {
+	return gen.scanEmbedTargets(path, baseDir, map[string]struct{}{}, 0)
+}
+
+func (gen *Generator) scanEmbedTargets(path, baseDir string, visited map[string]struct{}, depth int) time.Time {
+	var latest time.Time
+	if depth >= maxEmbedDepth {
+		return latest
+	}
+	input, err := os.ReadFile(path)
+	if err != nil {
+		return latest
+	}
+	z := html5.NewTokenizer(bytes.NewReader(input))
+	for {
+		tt := z.Next()
+		if tt == html5.ErrorToken {
+			return latest
+		}
+		if tt != html5.StartTagToken && tt != html5.SelfClosingTagToken {
+			continue
+		}
+		name, hasAttr := z.TagName()
+		if atom.Lookup(name) != atom.Embed {
+			continue
+		}
+		var src, typ string
+		var hasSrc bool
+		for hasAttr {
+			var key, val []byte
+			key, val, hasAttr = z.TagAttr()
+			switch atom.Lookup(key) {
+			case atom.Src:
+				src, hasSrc = string(val), true
+			case atom.Type:
+				typ = string(val)
+			}
+		}
+		if !hasSrc || strings.Contains(src, "{{") {
+			continue
+		}
+		resolved, err := gen.resolveEmbedSrc(baseDir, src)
+		if err != nil {
+			continue
+		}
+		if _, seen := visited[resolved]; seen {
+			continue
+		}
+		visited[resolved] = struct{}{}
+		if info, statErr := os.Stat(resolved); statErr == nil && info.ModTime().After(latest) {
+			latest = info.ModTime()
+		}
+		if method := cases.Title(language.English).String(gen.resolveMIMETypePlugin(typ)); method == "Markdown" || method == "Html" {
+			if sub := gen.scanEmbedTargets(resolved, filepath.Dir(resolved), visited, depth+1); sub.After(latest) {
+				latest = sub
+			}
+		}
+	}
 }
 
 // Markdown embeds a Markdown file.
