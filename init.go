@@ -128,6 +128,22 @@ func (cs ConfigSection) GetStringOK(key string) (value string, ok bool) {
 	return
 }
 
+// GetBool returns a bool value from current section, or false if key is
+// missing or not a bool. Callers that need to tell "absent"/"wrong type"
+// apart from a legitimately false value should use GetBoolOK instead.
+func (cs ConfigSection) GetBool(key string) (value bool) {
+	value, _ = cs.GetBoolOK(key)
+	return
+}
+
+// GetBoolOK returns a bool value from current section, and whether key was
+// present and held a bool value. ok is false both when key is absent and
+// when it holds a non-bool value.
+func (cs ConfigSection) GetBoolOK(key string) (value, ok bool) {
+	value, ok = cs[key].(bool)
+	return
+}
+
 // GetSection returns a subsection from current section, or nil if key is
 // missing or not a section.
 func (cs ConfigSection) GetSection(key string) (value ConfigSection) {

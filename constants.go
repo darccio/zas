@@ -81,6 +81,7 @@ var defaultConfig = ConfigSection{
 	"site": ConfigSection{
 		"baseurl":  "http://example.com",
 		"language": "en",
+		"sitemap":  false,
 	},
 	"mimetypes": ConfigSection{
 		"text/markdown": "markdown",
