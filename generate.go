@@ -501,6 +501,13 @@ func (gen *Generator) Run() error {
 			return err
 		}
 	}
+	if sitemapURL, sErr := gen.generateSitemap(); sErr != nil {
+		gen.recordErr(sErr)
+	} else if sitemapURL != "" {
+		if rErr := gen.appendSitemapToRobots(sitemapURL); rErr != nil {
+			gen.recordErr(rErr)
+		}
+	}
 	if len(gen.errs) > 0 {
 		return errors.Join(gen.errs...)
 	}
