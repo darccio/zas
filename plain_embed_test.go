@@ -24,8 +24,8 @@ func TestPlainEmbedDoesNotRenameParentTag(t *testing.T) {
 		t.Fatal(err)
 	}
 	gen := &Generator{}
-	if err := gen.Plain(doc.Find("embed"), doc, &ZasData{}); err != nil {
-		t.Fatalf("Plain() error = %v, want nil", err)
+	if err := gen.plain(doc.Find("embed"), doc, &ZasData{}); err != nil {
+		t.Fatalf("plain() error = %v, want nil", err)
 	}
 	div := doc.Find("div")
 	if div.Length() != 1 {
@@ -47,8 +47,8 @@ func TestPlainEmbedInsertsEscapedText(t *testing.T) {
 		t.Fatal(err)
 	}
 	gen := &Generator{}
-	if err := gen.Plain(doc.Find("embed"), doc, &ZasData{}); err != nil {
-		t.Fatalf("Plain() error = %v, want nil", err)
+	if err := gen.plain(doc.Find("embed"), doc, &ZasData{}); err != nil {
+		t.Fatalf("plain() error = %v, want nil", err)
 	}
 	div := doc.Find("div")
 	if div.Children().Length() != 0 {
@@ -71,8 +71,8 @@ func TestPlainEmbedExecutesTemplate(t *testing.T) {
 	}
 	gen := &Generator{}
 	data := &ZasData{Path: "/about.html"}
-	if err := gen.Plain(doc.Find("embed"), doc, data); err != nil {
-		t.Fatalf("Plain() error = %v, want nil", err)
+	if err := gen.plain(doc.Find("embed"), doc, data); err != nil {
+		t.Fatalf("plain() error = %v, want nil", err)
 	}
 	if want, got := "path is /about.html", doc.Find("div").Text(); got != want {
 		t.Fatalf("div.Text() = %q, want %q", got, want)
@@ -90,10 +90,10 @@ func TestPlainEmbedRemovesEmbedTag(t *testing.T) {
 		t.Fatal(err)
 	}
 	gen := &Generator{}
-	if err := gen.Plain(doc.Find("embed"), doc, &ZasData{}); err != nil {
-		t.Fatalf("Plain() error = %v, want nil", err)
+	if err := gen.plain(doc.Find("embed"), doc, &ZasData{}); err != nil {
+		t.Fatalf("plain() error = %v, want nil", err)
 	}
 	if doc.Find("embed").Length() != 0 {
-		t.Fatal("embed tag still present after Plain()")
+		t.Fatal("embed tag still present after plain()")
 	}
 }

@@ -131,7 +131,7 @@ If Zas finds an embed tag with a type attribute set to `text/yaml+myplugin`, it 
 <embed src="navigation.md" type="text/markdown" />
 ```
 
-Maybe you are asking yourself: "Where is mzsmarkdown?". Nowhere! It is a particular case where Zas calls an exported method Markdown. I wanted to allow anyone to override internal Markdown processing if they wish.
+Maybe you are asking yourself: "Where is mzsmarkdown?". Nowhere! It is a particular case where Zas has a built-in handler for it. I wanted to allow anyone to override internal Markdown processing if they wish.
 
 If you develop a new plugin, please contact me, and I will list it here :) Please, keep in mind: make it [idempotent](http://en.wikipedia.org/wiki/Idempotence).
 

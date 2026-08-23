@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
@@ -46,8 +45,6 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 	html5 "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 var helpers = thtml.FuncMap{
@@ -1475,8 +1472,8 @@ func (gen *Generator) resolveEmbedSrc(baseDir, src string) (string, error) {
 }
 
 // embedTargetModTime returns the latest mtime among path's own literal
-// <embed src="..."> targets, recursed the same way the Markdown and Html
-// embed handlers themselves recurse (Plain never re-parses its target, and
+// <embed src="..."> targets, recursed the same way the markdown and html
+// embed handlers themselves recurse (plain never re-parses its target, and
 // neither does an external MIME-type plugin, so recursion stops there too).
 // baseDir resolves a relative src exactly like NewZasData/Generate set
 // data.embedBaseDir for path's own render. Two things are deliberately left
@@ -1540,7 +1537,7 @@ func (gen *Generator) scanEmbedTargets(path, baseDir string, visited map[string]
 		if info, statErr := os.Stat(resolved); statErr == nil && info.ModTime().After(latest) {
 			latest = info.ModTime()
 		}
-		if method := cases.Title(language.English).String(gen.resolveMIMETypePlugin(typ)); method == "Markdown" || method == "Html" {
+		if name := strings.ToLower(gen.resolveMIMETypePlugin(typ)); name == "markdown" || name == "html" {
 			if sub := gen.scanEmbedTargets(resolved, filepath.Dir(resolved), visited, depth+1); sub.After(latest) {
 				latest = sub
 			}
@@ -1548,8 +1545,8 @@ func (gen *Generator) scanEmbedTargets(path, baseDir string, visited map[string]
 	}
 }
 
-// Markdown embeds a Markdown file.
-func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
+// markdown embeds a Markdown file.
+func (gen *Generator) markdown(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
 		resolved, err := gen.resolveEmbedSrc(data.embedBaseDir, src)
 		if err != nil {
@@ -1587,8 +1584,8 @@ func (gen *Generator) Markdown(e *goquery.Selection, _ *goquery.Document, data *
 	return
 }
 
-// Plain embeds a plain text file.
-func (gen *Generator) Plain(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
+// plain embeds a plain text file.
+func (gen *Generator) plain(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
 		resolved, err := gen.resolveEmbedSrc(data.embedBaseDir, src)
 		if err != nil {
@@ -1613,8 +1610,8 @@ func (gen *Generator) Plain(e *goquery.Selection, _ *goquery.Document, data *Zas
 	return
 }
 
-// Html embeds a HTML file.
-func (gen *Generator) Html(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
+// html embeds a HTML file.
+func (gen *Generator) html(e *goquery.Selection, _ *goquery.Document, data *ZasData) (err error) {
 	if src, ok := e.Attr(atom.Src.String()); ok {
 		resolved, err := gen.resolveEmbedSrc(data.embedBaseDir, src)
 		if err != nil {
@@ -1649,10 +1646,34 @@ func (gen *Generator) Html(e *goquery.Selection, _ *goquery.Document, data *ZasD
 	return
 }
 
+// embedPlugin returns the built-in embed handler named by name (the
+// lowercased mimetypes config value that selected it - see
+// resolveMIMETypePlugin and handleEmbedTags), and whether name matched one
+// at all. This is the closed, compile-time-known set of built-in handlers:
+// a switch, not a package-level map of method expressions, because a
+// package-level map here would create a genuine initialization cycle
+// (markdown calls parseAndReplace, which calls handleEmbedTags, which would
+// need to read the very map being initialized). Each returned value already
+// has the exact
+// func(*Generator, *goquery.Selection, *goquery.Document, *ZasData) error
+// shape, checked by the compiler - no runtime signature validation needed.
+func embedPlugin(name string) (fn func(*Generator, *goquery.Selection, *goquery.Document, *ZasData) error, ok bool) {
+	switch name {
+	case "markdown":
+		return (*Generator).markdown, true
+	case "plain":
+		return (*Generator).plain, true
+	case "html":
+		return (*Generator).html, true
+	default:
+		return nil, false
+	}
+}
+
 /*
  * Handles <embed> tags.
  *
- * They can be handled with MIME type plugins or internal exported methods like Markdown.
+ * They can be handled with MIME type plugins or built-in handlers like markdown.
  */
 func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err error) {
 	doc.Find(atom.Embed.String()).EachWithBreak(func(_ int, e *goquery.Selection) bool {
@@ -1663,19 +1684,10 @@ func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err
 				return false
 			}
 			plugin := gen.resolveMIMETypePlugin(typ)
-			method := reflect.ValueOf(gen).MethodByName(cases.Title(language.English).String(plugin))
-			if !isEmbedPluginMethod(method) {
-				err = gen.handleMIMETypePlugin(e)
+			if fn, ok := embedPlugin(strings.ToLower(plugin)); ok {
+				err = fn(gen, e, doc, data)
 			} else {
-				args := make([]reflect.Value, 3)
-				args[0] = reflect.ValueOf(e)
-				args[1] = reflect.ValueOf(doc)
-				args[2] = reflect.ValueOf(data)
-				r := method.Call(args)
-				rerr := r[0].Interface()
-				if ierr, ok := rerr.(error); ok {
-					err = ierr
-				}
+				err = gen.handleMIMETypePlugin(e)
 			}
 			if err != nil {
 				return false
@@ -1684,34 +1696,6 @@ func (gen *Generator) handleEmbedTags(doc *goquery.Document, data *ZasData) (err
 		return true
 	})
 	return
-}
-
-/*
- * Reports whether method is a valid embed-plugin dispatch target: a method
- * with the exact (e *goquery.Selection, doc *goquery.Document, data *ZasData) error
- * signature. Config data chooses the method name (see resolveMIMETypePlugin),
- * so any exported Generator method is reachable by MethodByName and must be
- * shape-checked before Call to avoid a reflect panic on arity/type mismatch.
- */
-func isEmbedPluginMethod(method reflect.Value) bool {
-	if !method.IsValid() {
-		return false
-	}
-	want := []reflect.Type{
-		reflect.TypeFor[*goquery.Selection](),
-		reflect.TypeFor[*goquery.Document](),
-		reflect.TypeFor[*ZasData](),
-	}
-	t := method.Type()
-	if t.NumIn() != len(want) || t.NumOut() != 1 {
-		return false
-	}
-	for i, w := range want {
-		if t.In(i) != w {
-			return false
-		}
-	}
-	return true
 }
 
 // pluginNameRe restricts resolved plugin names to safe exec.Command argv[0]
