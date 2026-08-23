@@ -27,9 +27,9 @@ type embedHandlerCase struct {
 }
 
 var embedHandlerCases = []embedHandlerCase{
-	{"Markdown", "text/markdown", "note.md", "# Note\n\nHello from markdown.\n", (*Generator).Markdown, "Hello from markdown."},
-	{"Plain", "text/plain", "note.txt", "hello from plain", (*Generator).Plain, "hello from plain"},
-	{"Html", "text/html", "note.html", "<p>hello from html</p>", (*Generator).Html, "hello from html"},
+	{"Markdown", "text/markdown", "note.md", "# Note\n\nHello from markdown.\n", (*Generator).markdown, "Hello from markdown."},
+	{"Plain", "text/plain", "note.txt", "hello from plain", (*Generator).plain, "hello from plain"},
+	{"Html", "text/html", "note.html", "<p>hello from html</p>", (*Generator).html, "hello from html"},
 }
 
 func embedDocFor(t *testing.T, src, typ string) *goquery.Document {
