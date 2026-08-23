@@ -65,6 +65,27 @@ zas:
 
 Only an exact, top-level match is honored: no prefix or glob matching, and a dot-directory nested anywhere - including inside an allowed one - still gets skipped. `.zas` and `.git` can never be allowlisted this way, no matter what's listed in config.
 
+Here's every key Zas itself understands in `config.yml`, together in one place (a real site's own file will typically be much shorter, since every one of these has a default and nothing here is required):
+
+```yaml
+zas:
+  layout: .zas/layout.html      # default: .zas/layout.html
+  deploy: .zas/deploy           # default: .zas/deploy
+  allowed_dotdirs: [".well-known"] # default: none - see above
+site:
+  baseurl: https://example.com  # default: http://example.com - see {{.Site.BaseURL}} below
+  language: en                  # default: en - see {{.Language}} and I18N below
+  image: https://example.com/og-image.png # default: unset - see {{.Site.Image}} below
+  sitemap: true                 # default: false - see "Sitemap generation" below
+mimetypes:
+  text/markdown: markdown       # default
+  text/plain: plain             # default
+  text/html: html               # default
+  text/yaml+myplugin: myplugin  # example custom MIME type plugin - see below
+```
+
+This is illustrative, not exhaustive of every key a *plugin* might read from its own section: plugins are free to define and read their own config (see "Beware" under Plugins below), and `config.yml` will happily carry whatever additional sections they need.
+
 To extend Zas functionality, you can use and create plugins. You can develop them in any language (not only in Golang) thanks to Unix magic. And more gophers.
 
 ### Plugins
@@ -146,6 +167,26 @@ All plugin mechanisms resolve a name to a binary on `PATH` and execute it - Zas 
 Every plugin name - from `mimetypes:` config or from a script tag's `type` - is validated as a plain `[a-zA-Z0-9_-]+` string before anything is executed, so content can't smuggle in a path (`../../something`) to make `exec.Command` skip `PATH` lookup entirely.
 
 If you run `zas generate` over content you don't fully control, pass `-no-plugins`: any embed needing an external MIME type plugin, or any script tag naming one, fails with a clear error instead of executing anything. This does not cover the `zas <name>` command line itself, which is never content-triggered. Zas's own built-in embed handlers (like `Markdown`) aren't affected either - they never spawn a process.
+
+### Sitemap generation
+
+Zas can generate a standards-compliant XML sitemap (and keep your `robots.txt` pointing at it) as a native part of `zas generate` - no plugin involved, since building one needs the complete deploy set, the site's base URL, and every page's resolved language, none of which a plugin has access to (see "Beware" above).
+
+Turn it on with `site.sitemap: true` in `config.yml` (default `false`); it also needs a real `site.baseurl` (not the `http://example.com` placeholder `zas init` scaffolds), since every `<loc>` is built from it:
+
+```yaml
+site:
+  baseurl: https://example.com
+  sitemap: true
+```
+
+With that set, every `zas generate` run writes `sitemap.xml` at the deploy root, containing one `<loc>` per deployed page plus an accurate `<lastmod>` - deliberately nothing else. `<changefreq>` and `<priority>` are never emitted: Google and Bing both ignore them as of this writing, so they'd only add file size for no benefit. Past roughly 45,000 pages (well under the sitemaps.org 50,000-URL/50MB hard limits), Zas automatically switches to a `sitemap-index.xml` plus numbered `sitemap-1.xml`, `sitemap-2.xml`, ... shards instead of one file - nothing to configure for that either.
+
+**`<lastmod>` accuracy.** Zas derives each page's `<lastmod>` from its source file's most recent git commit date when the site lives inside a git working tree, falling back to the source file's own mtime when git isn't available (or the file isn't tracked), and omitting `<lastmod>` entirely for that page only if neither is available - a wrong or fabricated date is worse than none, since both Google and Bing stop trusting a sitemap's `<lastmod>` values once they look unreliable. If you build in CI, make sure your checkout has full history (e.g. `fetch-depth: 0` on `actions/checkout` - the shallow default only sees the checkout's own commit, which would otherwise look like every page's "true" last-modified date).
+
+**Multilingual sites.** A site using the language-subdirectory i18n convention described below (see "你会说普通话?") gets reciprocal `hreflang` annotations for free: pages that share the same relative path across language directories (`es/faq.md`, `ca/faq.md`, root `faq.md`, ...) are grouped and cross-linked automatically, with no extra configuration beyond what I18N already requires. A page not grouped that way - one whose language comes only from its own leading-comment override, with no directory-level grouping - doesn't get hreflang treatment; partial translation coverage (a page with no sibling translation yet) is never an error, it simply ships without hreflang links of its own.
+
+**`robots.txt`.** When sitemap generation is on, Zas makes sure deploy's `robots.txt` declares a `Sitemap:` directive pointing at whatever was generated (the plain sitemap, or the index once sharded): if your own `robots.txt` reaches deploy (it's just another file, copied like any other unrecognized extension), Zas appends the directive to it if it's missing; if your site has no `robots.txt` at all, Zas writes a minimal permissive one (`User-agent: *` / `Allow: /`) so the sitemap stays discoverable with zero extra setup.
 
 ## Building sites
 
