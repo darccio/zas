@@ -167,6 +167,9 @@ type Generator struct {
 	cachedZasDirectoryConfigs map[string]dirConfigEntry
 	// Guards cachedZasDirectoryConfigs, read and written from many renderAsync goroutines.
 	dirConfigMu sync.Mutex
+	// feed is nil for an untouched default-off site. Enabled runs collect
+	// complete pre-layout bodies during the existing page render pass.
+	feed *feedState
 
 	wg sync.WaitGroup
 
@@ -484,6 +487,9 @@ func (gen *Generator) Run() (runErr error) {
 			}
 		}
 	}()
+	if err := gen.prepareFeeds(); err != nil {
+		return err
+	}
 	if info, statErr := os.Stat(ConfigFile); statErr == nil {
 		gen.configModTime = info.ModTime()
 	}
@@ -531,6 +537,9 @@ func (gen *Generator) Run() (runErr error) {
 	}
 	if len(gen.errs) > 0 {
 		return errors.Join(gen.errs...)
+	}
+	if err := gen.finishFeeds(); err != nil {
+		return err
 	}
 	if err = gen.finishMarkdownOutputs(); err != nil {
 		return err
@@ -682,7 +691,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	// creates a source directory's deploy-side counterpart lazily, only
 	// once something actually needs to be written into it, so a directory
 	// whose entire content is skipped never gets an empty one in deploy.
-	if !info.IsDir() && gen.sourceIsNewer(path, info) {
+	if !info.IsDir() && (gen.feedNeedsRender(path) || gen.sourceIsNewer(path, info)) {
 		outputPath := swapExtension(path, ".md", ".html")
 		if claimant, ok := gen.claimedOutputs[outputPath]; ok && gen.markdownState == nil {
 			gen.recordErr(fmt.Errorf("%s: output path %q already claimed by %s, skipping", path, outputPath, claimant))
@@ -760,7 +769,7 @@ func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr err
 		}
 		return err
 	}
-	if gen.markdownReaperProtected(path, info) {
+	if gen.markdownReaperProtected(path, info) || gen.feedProtects(path) {
 		return nil
 	}
 	sourcePath := "." + strings.TrimPrefix(path, gen.GetDeployPath())
@@ -1353,6 +1362,9 @@ func (gen *Generator) renderPrepared(path string, input []byte, data *ZasData) (
 				data.bodyAttrs[a.Key] = a.Val
 			}
 		}
+	}
+	if err = gen.collectFeed(data); err != nil {
+		return err
 	}
 	if !pagePublished(data.Page) {
 		// This is the answer to upstream issue #15 ("How can we exclude a
