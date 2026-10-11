@@ -1257,6 +1257,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 		// real value, so the layout's own view is completely unaffected by
 		// whatever preview the page body saw.
 		data.Page = earlyPageConfig(input)
+		data.pageConfigSource, _ = leadingConfigComment(input)
 		if title, ok := leadingH1Text(input); ok {
 			data.FirstTitle = title
 		}
@@ -1289,6 +1290,7 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 	}
 	gen.cleanUnnecessaryPTags(doc)
 	var pageErr error
+	data.pageConfigSource = pageConfigComment(doc)
 	data.Page, pageErr = gen.extractPageConfig(doc)
 	if pageErr != nil {
 		// A malformed page-config comment is reported but doesn't abort the
@@ -1390,6 +1392,15 @@ func (gen *Generator) getTitle(doc *goquery.Document) (title string) {
  * keeps working exactly as before.
  */
 func (gen *Generator) extractPageConfig(doc *goquery.Document) (config map[interface{}]interface{}, err error) {
+	if comment := pageConfigComment(doc); comment != nil {
+		err = yaml.Unmarshal(comment, &config)
+	}
+	return
+}
+
+// pageConfigComment returns the same top-level comment used for Page, so
+// metadata helpers can validate YAML timestamp spellings lazily.
+func pageConfigComment(doc *goquery.Document) []byte {
 	var comment *html5.Node
 	for _, root := range doc.Nodes {
 		for child := root.FirstChild; child != nil; child = child.NextSibling {
@@ -1403,9 +1414,9 @@ func (gen *Generator) extractPageConfig(doc *goquery.Document) (config map[inter
 		}
 	}
 	if comment != nil {
-		err = yaml.Unmarshal([]byte(comment.Data), &config)
+		return []byte(comment.Data)
 	}
-	return
+	return nil
 }
 
 /*

@@ -1,0 +1,12 @@
+<!--
+date: 2024-11-27T22:22:00+01:00
+updated: "2025-01-02T03:04:05Z"
+summary: 'Summary {{.Extra "/site/marker"}}'
+tags: [one, two]
+-->
+<h1>Metadata</h1>
+<p id="preview-date">{{.Date.Format "2006-01-02T15:04:05Z07:00"}}</p>
+<p id="preview-updated">{{.Updated.Format "2006-01-02T15:04:05Z07:00"}}</p>
+<p id="preview-summary">{{.Summary}}</p>
+<p id="preview-tags">{{range .Tags}}[{{.}}]{{end}}</p>
+<p id="preview-canonical">{{.Canonical}}</p>
