@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Feed &amp; Site (Español)</title>
+    <link>https://example.test/</link>
+    <description>Channel &lt;plain&gt; &amp; description</description>
+    <language>es</language>
+    <atom:link href="https://example.test/es/feed.xml" rel="self" type="application/rss+xml"></atom:link>
+    <lastBuildDate>Sat, 01 Feb 2025 11:00:00 +0000</lastBuildDate>
+    <item xml:lang="es">
+      <title>Español</title>
+      <link>https://example.test/posts/spanish/</link>
+      <guid isPermaLink="true">https://example.test/posts/spanish/</guid>
+      <pubDate>Tue, 31 Dec 2024 11:00:00 +0000</pubDate>
+      <description></description>
+      <content:encoded><![CDATA[<h1>Español</h1>
+<p>Spanish article content outside the combined feed limit.</p>]]></content:encoded>
+      <dc:creator>Feed &amp; Site</dc:creator>
+      <dc:language>es</dc:language>
+    </item>
+    <item xml:lang="es">
+      <title>Más antiguo</title>
+      <link>https://example.test/posts/older.html</link>
+      <guid isPermaLink="true">https://example.test/posts/older.html</guid>
+      <pubDate>Fri, 01 Nov 2024 11:00:00 +0000</pubDate>
+      <description></description>
+      <content:encoded><![CDATA[<h1>Más antiguo</h1>
+<p>Older Spanish content.</p>]]></content:encoded>
+      <dc:creator>Feed &amp; Site</dc:creator>
+      <dc:language>es</dc:language>
+    </item>
+  </channel>
+</rss>

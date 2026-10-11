@@ -1,0 +1,12 @@
+zas:
+  layout: .zas/layout.html
+  deploy: .zas/deploy
+site:
+  title: Feed & Site
+  description: Channel <plain> & description
+  baseurl: https://example.test
+  language: mul
+  feed: true
+  feed_sections: [posts]
+  feed_limit: 2
+  feed_per_language: true

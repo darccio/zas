@@ -15,7 +15,7 @@ Yes, it is another NIH, but... I think Zas is a different kind of beast. I admit
 1. Gophers. Yes, there is [Hugo](http://gohugo.io/) (kudos!) but... Who wants to learn another directory layout? There is also [Hastie](https://github.com/mkaz/hastie) and [lots of other static site generators](https://jamstack.org/generators/).
 2. Pure Markdown. And HTML, if you want.
 3. Just a loop. Zas loops over the current directory (and subdirectories), converting .md and .html files and copying everything else as-is - except dot-files and dot-directories, which are ignored entirely.
-4. Your imagination is your limit. Zas has a simple extension mechanism based on subcommands. Do you need to handle a blog with Zas? Install/create a new extension and do it!
+4. Your imagination is your limit. Zas has a simple extension mechanism based on subcommands, plus optional native sitemaps and RSS feeds for article sites.
 5. Unobtrusive structure, no `_` files. More in the [Usage section](#usage).
 
 ## Usage
@@ -77,6 +77,13 @@ site:
   language: en                  # default: en - see {{.Language}} and I18N below
   image: https://example.com/og-image.png # default: unset - see {{.Site.Image}} below
   sitemap: true                 # default: false - see "Sitemap generation" below
+  feed: true                    # default: false - see "RSS feeds" below
+  feed_title: My articles       # default: site.title; required when feeds are enabled
+  feed_description: New writing # default: site.description, then feed title
+  feed_sections: [posts]        # default: all directories, with conservative article selection
+  feed_limit: 50                # default: 50; positive integer, applied independently per feed
+  feed_per_language: true       # default: false; discover non-default article languages
+  feed_strict: true             # default: true; invalid selected articles fail generation
 mimetypes:
   text/markdown: markdown       # default
   text/plain: plain             # default
@@ -187,6 +194,50 @@ With that set, every `zas generate` run writes `sitemap.xml` at the deploy root,
 **Multilingual sites.** A site using the language-subdirectory i18n convention described below (see "你会说普通话?") gets reciprocal `hreflang` annotations for free: pages that share the same relative path across language directories (`es/faq.md`, `ca/faq.md`, root `faq.md`, ...) are grouped and cross-linked automatically, with no extra configuration beyond what I18N already requires. A page not grouped that way - one whose language comes only from its own leading-comment override, with no directory-level grouping - doesn't get hreflang treatment; partial translation coverage (a page with no sibling translation yet) is never an error, it simply ships without hreflang links of its own.
 
 **`robots.txt`.** When sitemap generation is on, Zas makes sure deploy's `robots.txt` declares a `Sitemap:` directive pointing at whatever was generated (the plain sitemap, or the index once sharded): if your own `robots.txt` reaches deploy (it's just another file, copied like any other unrecognized extension), Zas appends the directive to it if it's missing; if your site has no `robots.txt` at all, Zas writes a minimal permissive one (`User-agent: *` / `Allow: /`) so the sitemap stays discoverable with zero extra setup.
+
+## RSS feeds
+
+Set `site.feed: true` to generate a native [RSS 2.0](https://www.rssboard.org/rss-specification) feed at `/feed.xml`. This uses existing dependencies. Feeds are disabled by default; an untouched disabled site produces the same page bytes and no feed files or ownership manifest. Unused feed options are ignored while disabled.
+
+```yaml
+site:
+  baseurl: https://example.com
+  language: mul
+  feed: true
+  feed_title: My articles
+  feed_description: New writing in English and Spanish.
+  feed_sections: [posts]
+  feed_limit: 50
+  feed_per_language: true
+  feed_strict: true
+```
+
+`feed_sections` is a list of relative article directories, including descendants; `.` selects the whole site. Within configured sections, non-archive Markdown and HTML pages are articles and must have an explicit `date`. An index directly at a section root, such as `posts/index.md`, is an archive; a nested article such as `posts/slug/index.md` is included. Utility pages in an article section can set `article: false`. With sections omitted or empty, Zas selects pages with a `date` property or `article: true`, excluding the unclassified root homepage index. An explicit boolean `article` always overrides this selection; `article: true` also selects an otherwise excluded archive and requires a date. `publish: false`, `draft: true`, and `feed: false` exclude a page before metadata validation.
+
+Each article can use the shared metadata helpers' properties:
+
+```yaml
+<!--
+date: 2024-11-27T22:22:00+01:00
+updated: 2025-01-02T03:04:05Z
+summary: A short plain-text summary.
+tags: [writing, software]
+author: Dario
+language: es
+-->
+```
+
+Dates must be RFC3339 timestamps with a timezone. No publication date is inferred from git, file timestamps or generation time. Feed titles come from the page title or first H1. Summaries and tags use `Summary()` and `Tags()` without legacy-property fallbacks. Creator resolves `author` from page, directory and site config, then falls back to the feed title. Language follows the same page/directory/site resolution as `Language()` and must be a path-safe language tag such as `en`, `es`, or `pt-BR`.
+
+Items contain the full rendered article body in `content:encoded` CDATA, after the article's templates, embeds and plugins, before the layout. Layout navigation/footer and the leading config comment are absent. Relative `href`, `src` and `srcset` URLs resolve against the article's canonical URL; non-HTTP schemes and srcset descriptors are preserved. Plain resolved summaries are escaped for RSS readers' HTML interpretation. Items include canonical permalink GUIDs, RFC1123Z publication dates, categories, `dc:creator`, `dc:language`, and `xml:lang`. RSS core elements have no namespace; Dublin Core terms use the standard [elements/1.1 namespace](https://www.dublincore.org/specifications/dublin-core/dcmi-terms/).
+
+Articles are sorted by publication instant, newest first, with canonical URL as a tie-breaker. `feed_limit` applies to each feed after language filtering. `feed_per_language: true` discovers every non-default resolved article language, creating `/en/feed.xml`, `/es/feed.xml`, etc. English and Spanish feed titles receive `(English)` and `(Español)` suffixes; other languages use their tag. The combined feed includes every language. Each channel has an Atom self link. `lastBuildDate` is the maximum `Updated()` among its emitted items: explicit `updated`, otherwise the last commit of a currently tracked source. It is omitted when unavailable, without mtime or generation-time fallback.
+
+Incremental runs collect unchanged articles through the same render pass, so feeds retain their full content and templates/plugins execute once per page per run. A plugin that emits another Zas script or embed directive requires the layout's second processing pass; RSS rejects that residual directive rather than rerunning it. Use `feed: false` for such a page, or produce its complete body in the first pass. `feed_strict: true` makes invalid selected metadata or residual directives stop generation before feed finalization; an incremental failure keeps the prior feeds and ownership intact. `false` logs and skips invalid articles. Duplicate canonical GUIDs, invalid XML, unsafe output paths, and collisions still fail generation. Full generation retains its existing clear-on-start behavior; use a staging directory when the prior published output must survive any render failure.
+
+Zas records feed paths, content hashes and the absolute deploy directory in private `.zas/feed-outputs.json`, outside deploy. Existing unmanaged feed outputs and source `feed.xml` collisions are rejected before full cleanup. Per-language feeds reserve language-tag `/feed.xml` source paths; known article-language ancestor collisions are also checked before cleanup. A language supplied dynamically by a template receives its final collision check after rendering; `-full` still follows its existing clear-on-start behavior in that case, so build into staging before publication. Each feed file is replaced atomically and completed writes are recorded individually, allowing retries after a later write fails. A failed ownership write restores the previous feed bytes or absence.
+
+Turning feeds off, disabling language feeds or removing a language's articles removes only recorded, hash-matching outputs. A real source file copied over a former feed is retained and ownership is relinquished. Edited managed feeds cause an error; move them aside before rebuilding. Keep the manifest with the build state, and remove old managed feeds plus their manifest before changing `zas.deploy`. Losing the manifest intentionally relinquishes ownership: existing feeds must then be moved aside before re-enabling generation.
 
 ## Building sites
 

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Feed &amp; Site (English)</title>
+    <link>https://example.test/</link>
+    <description>Channel &lt;plain&gt; &amp; description</description>
+    <language>en</language>
+    <atom:link href="https://example.test/en/feed.xml" rel="self" type="application/rss+xml"></atom:link>
+    <lastBuildDate>Wed, 05 Feb 2025 12:30:00 +0000</lastBuildDate>
+    <item xml:lang="en">
+      <title>Newest &amp; &lt;title&gt;</title>
+      <link>https://example.test/posts/newest/</link>
+      <guid isPermaLink="true">https://example.test/posts/newest/</guid>
+      <pubDate>Fri, 03 Jan 2025 10:00:00 +0100</pubDate>
+      <description>Literal &amp;lt;target&amp;gt;, &amp;amp; and ©.</description>
+      <content:encoded><![CDATA[<h1>Newest</h1>
+<p>This is the complete article, beyond its summary.</p>
+<p><a href="https://example.test/posts/newest/next.html">Next</a><a href="https://example.test/root?q=x#part">Root</a><a href="https://example.test/posts/newest/?q=x">Query</a><a href="https://example.test/posts/newest/#part">Fragment</a><a href="https://cdn.test/file">CDN</a><a href="mailto:a@example.test">Email</a></p>
+<img src="https://example.test/posts/newest/image.png" srcset="https://example.test/posts/newest/small.png 1x, https://example.test/large.png 2x, data:image/png;base64,AAAA 3x"/>
+<p>CDATA ending ]]&gt; survives.</p>]]></content:encoded>
+      <dc:creator>A &amp; B</dc:creator>
+      <dc:language>en</dc:language>
+      <category>writing</category>
+      <category>&lt;tag&gt;</category>
+    </item>
+    <item xml:lang="en">
+      <title>Second</title>
+      <link>https://example.test/posts/second.html</link>
+      <guid isPermaLink="true">https://example.test/posts/second.html</guid>
+      <pubDate>Thu, 02 Jan 2025 11:00:00 +0000</pubDate>
+      <description></description>
+      <content:encoded><![CDATA[<h1>Second</h1>
+<p>Second article content.</p>]]></content:encoded>
+      <dc:creator>Feed &amp; Site</dc:creator>
+      <dc:language>en</dc:language>
+    </item>
+  </channel>
+</rss>
