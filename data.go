@@ -102,6 +102,9 @@ type ZasData struct {
 	// embeds (e.g. a site-wide footer) intentionally keep resolving
 	// site-root-relative regardless of which page is currently rendering.
 	embedBaseDir string
+	// markdownBody is the optional public, rendered Markdown body. It is
+	// populated only by the opt-in Markdown preparation path.
+	markdownBody []byte
 }
 
 // ZasSiteData is the site configuration.

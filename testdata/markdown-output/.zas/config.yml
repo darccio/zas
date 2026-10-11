@@ -1,0 +1,8 @@
+site:
+  baseurl: https://example.com
+  language: en
+  title: Example site
+  markdown_output: true
+zas:
+  layout: .zas/layout.html
+  deploy: .zas/deploy
