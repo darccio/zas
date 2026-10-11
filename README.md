@@ -397,7 +397,7 @@ Feel free to open an issue if you think Zas should do something specific in its 
 
 ## Contact me
 
-If I can help you, you have an idea or you are using Zas in your projects, don't hesitate to drop me a line (or a pull request): [@darccio](https://twitter.com/darccio)
+If I can help you, you have an idea or you are using Zas in your projects, don't hesitate to drop me a line (or a pull request): [my website](https://dario.cat/), [Bluesky](https://bsky.app/profile/dario.cat), or [Mastodon](https://mastodont.cat/@dario).
 
 ## About
 
