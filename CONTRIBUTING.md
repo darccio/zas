@@ -101,8 +101,10 @@ logic.
 
 ## Releasing
 
-Pushing a tag matching `v*` (e.g. `v0.1.0`) triggers
-`.github/workflows/release.yml`, which runs
+Pushing a numeric `vX.Y.Z` tag (e.g. `v0.0.9`) matching the exact filter
+`v[0-9]+.[0-9]+.[0-9]+` triggers
+[the release workflow](.github/workflows/release.yml). Prerelease tags and
+other names starting with `v` do not trigger it. The workflow runs
 [GoReleaser](https://goreleaser.com) (config in `.goreleaser.yaml`) to build
 `cmd/zas` for linux/darwin/windows on amd64/arm64, archive and checksum the
 binaries, generate a changelog grouped by commit type from the Conventional
@@ -111,10 +113,21 @@ Release. `zas version`'s own output (see `cmd/zas/main.go`) needs no extra
 wiring for this - it already reads the module version and VCS revision Go's
 toolchain stamps into the binary at build time.
 
+Release from a clean checkout of the merged `master` revision after the
+checks above pass. Keep [README.md](README.md) and the focused guides in sync
+with user-facing changes:
+
+- [Template helpers](docs/templates.md): `.Date`, `.Updated`, `.Summary`,
+  `.Tags`, `.Canonical`, and the layout-only `dict`, `list` and `json` helpers.
+- [Publishing](docs/publishing.md): opt-in RSS with `site.feed`, and rendered
+  Markdown twins with `site.publish_markdown`.
+- [Configuration](docs/configuration.md): defaults and page-level overrides.
+
 To try the whole pipeline locally without publishing anything, install
 [goreleaser](https://goreleaser.com/install/) and run:
 
 ```sh
+goreleaser check
 goreleaser release --snapshot --skip=publish --clean
 ```
 
