@@ -82,6 +82,13 @@ func replaceFeedConfig(t *testing.T, old, replacement string) {
 }
 
 func TestFeedFullIncrementalContent(t *testing.T) {
+	// Read reviewed output fixtures before newTestSite changes directory.
+	// All emitted input articles use fixed explicit date/updated values;
+	// neither the current time nor the checkout's git history enters RSS.
+	expected := make(map[string]string)
+	for _, name := range []string{"feed.xml", "en/feed.xml", "es/feed.xml"} {
+		expected[name] = string(mustReadFeedFile(t, filepath.Join("testdata", "feed-expected", filepath.FromSlash(name))))
+	}
 	newTestSite(t, "feed-site")
 	ageSources(t, -time.Hour)
 	if err := generate(t, fullGen, noPluginsGen); err != nil {
@@ -90,6 +97,11 @@ func TestFeedFullIncrementalContent(t *testing.T) {
 	original := readDeploy(t, "feed.xml")
 	en := readDeploy(t, "en/feed.xml")
 	es := readDeploy(t, "es/feed.xml")
+	for name, got := range map[string]string{"feed.xml": original, "en/feed.xml": en, "es/feed.xml": es} {
+		if got != expected[name] {
+			t.Errorf("%s differs from reviewed testdata/feed-expected/%s\nwant:\n%s\ngot:\n%s", name, name, expected[name], got)
+		}
+	}
 	feed := decodeFeed(t, original)
 	if feed.XMLName.Space != "" || feed.XMLName.Local != "rss" || feed.Version != "2.0" {
 		t.Fatalf("RSS root: %#v", feed)
@@ -167,9 +179,9 @@ func TestFeedFullIncrementalContent(t *testing.T) {
 	if err := generate(t, noPluginsGen); err != nil {
 		t.Fatal(err)
 	}
-	for name, want := range map[string]string{"feed.xml": original, "en/feed.xml": en, "es/feed.xml": es} {
+	for name, want := range expected {
 		if got := readDeploy(t, name); got != want {
-			t.Errorf("incremental %s changed despite unchanged sources", name)
+			t.Errorf("incremental %s differs from reviewed golden despite unchanged sources", name)
 		}
 	}
 }
