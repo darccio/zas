@@ -301,6 +301,96 @@ There is also a page config property that isn't exposed as a template field, sin
 
 * `publish`: set to `false` in a file's config comment to keep that file out of `.zas/deploy` as a standalone page, while it stays fully available to be pulled into another page via `<embed>`. Defaults to `true` (published), so existing files are unaffected.
 
+### Optional Markdown output
+
+To publish a rendered Markdown body beside each Markdown page's HTML, opt in
+in `.zas/config.yml`:
+
+```yaml
+site:
+  publish_markdown: true
+```
+
+`section/index.md` produces `section/index.html` and `section/index.md` in
+deploy; `contact.md` produces `contact.html` and `contact.md`. Source extension
+matching is case insensitive: `section/INDEX.MD` produces `section/INDEX.html`
+and `section/INDEX.md`. Sources are never changed, and existing HTML URLs,
+`.Path`, `.URL` and `.Canonical` retain their meanings. HTML sources do not
+get Markdown conversions. This setting does not add HTTP content negotiation.
+The default is off: sites that have never enabled it retain the existing
+rendering path and gain no ownership state or extra output files.
+
+For eligible Markdown pages, Zas executes the page's Go template once on the
+Markdown source, before converting it to HTML. The resulting Markdown body
+feeds both outputs. Markdown syntax and code fences survive in the twin;
+template values that contain Markdown now participate in Markdown parsing.
+This is an opt-in ordering change from the legacy conversion-before-template
+path. Static Markdown H1 headings and explicit `title` metadata remain
+available to `.Title`/`.FirstTitle` during execution; the HTML layout receives
+the final rendered metadata and body as usual. The leading YAML configuration
+comment is removed from twins, including embedded files' leading comments.
+Twins contain the body only: no automatic serialization of `.Page`,
+`.Directory`, `.Extra`, or other metadata maps, and no layout chrome.
+
+`publish: false`, `draft: true`, and page-level `publish_markdown: false`
+suppress a twin. A draft still produces its existing HTML page; this feature
+does not unpublish live drafts. An explicit page opt-out keeps the legacy
+HTML rendering path, including its normal plugin behavior:
+
+```markdown
+<!--
+publish_markdown: false
+-->
+# HTML-only page
+```
+
+Literal Go template documentation requires `template: false`; in that case
+literal `{{...}}` is intentionally preserved as public content in both
+formats. On templated pages, rendered output containing unexecuted Go action
+delimiters is rejected rather than being published or executed a second time.
+As with ordinary page templates, authors choose which values to insert into
+the body and must avoid inserting private configuration themselves.
+
+Built-in Markdown embeds expand into Markdown, and must occupy a standalone
+line. Reference definitions or footnotes combined with Markdown embeds are
+rejected because merging documents would change their separate reference
+scopes; use an HTML embed or page opt-out for those pages. HTML embeds execute
+their own template once and supply their body as raw
+HTML. Plain embeds execute once and escape Markdown punctuation as entities
+so their text retains its literal meaning. Nested built-in embeds resolve
+relative to the containing file, enforce site-root containment (including
+symlinks), and retain the existing nesting bound. Embeds and script examples
+inside Markdown code are literal. External MIME embeds and content script
+plugins are unsupported in twins: Zas fails with page opt-out guidance before
+invoking them. Layout plugins still follow the ordinary HTML-only layout
+pass; twins do not include the layout. `-no-plugins` continues to govern
+every content-triggered external plugin in the HTML path.
+
+Output claims and source/deploy overlap are checked before deploy mutation,
+even for unchanged sources. Use the conventional `.zas/deploy`, or a new or
+empty destination. An existing source directory, `.zas/partials`, the site
+root, a parent of it, or `.git` cannot be repurposed as deploy. A previous
+matching ownership manifest identifies an existing opt-in destination.
+An existing twin without a matching ownership hash is a collision; move it
+or opt its page out before rebuilding. Deploy parent symlinks cannot redirect
+outputs outside the selected deploy directory.
+
+Zas stores output paths and hashes in the private
+`.zas/markdown-outputs.json`, with the resolved deploy identity. Incremental
+builds recreate missing twins and clean previous owned outputs when a source
+is deleted, renamed, unpublished, marked draft, or opted out. Disabling
+`site.publish_markdown` removes owned twins on the next successful build and
+removes the manifest; HTML pages remain. Incremental cleanup deletes only
+files whose hashes still match ownership, preserving manual edits and
+unowned Markdown files. It may leave empty deploy directories. Ownership
+from another deploy directory is never used for cleanup. Ordinary incremental
+asset cleanup remains unchanged. `-full` retains its existing behavior of
+clearing the entire selected deploy directory after preflight and rebuilding
+it, including ordinary assets/HTML and removal of stale directories.
+If a render fails after other twins were written, Zas records those successful
+outputs' ownership privately without deleting stale outputs, so a corrected
+build can safely retry.
+
 ### What about layout.html?
 
 It is plain HTML. No frills. Just add a placeholder `{{.Body}}` in your template.

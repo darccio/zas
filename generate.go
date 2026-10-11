@@ -215,6 +215,9 @@ type Generator struct {
 	// touched from walk, whose own invocations are sequential, so no
 	// mutex is needed.
 	claimedOutputs map[string]string
+
+	// markdownState is nil for legacy sites that have never opted in.
+	markdownState *markdownOutputState
 }
 
 // renderConcurrency bounds how many renderAsync goroutines may run at
@@ -462,7 +465,7 @@ func (gen *Generator) parseAndReplace(processed io.Reader, data *ZasData, head h
 
 // Run performs a full generation pass over the current directory,
 // rendering every source file into the configured deploy path.
-func (gen *Generator) Run() error {
+func (gen *Generator) Run() (runErr error) {
 	cfg, err := NewConfig()
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -471,6 +474,16 @@ func (gen *Generator) Run() error {
 		return err
 	}
 	gen.Config = cfg
+	if err = gen.prepareMarkdownOutputs(); err != nil {
+		return err
+	}
+	defer func() {
+		if runErr != nil {
+			if err := gen.recoverMarkdownOwnership(); err != nil {
+				runErr = errors.Join(runErr, err)
+			}
+		}
+	}()
 	if info, statErr := os.Stat(ConfigFile); statErr == nil {
 		gen.configModTime = info.ModTime()
 	}
@@ -501,6 +514,14 @@ func (gen *Generator) Run() error {
 			return err
 		}
 	}
+	if gen.markdownState != nil && len(gen.errs) > 0 {
+		return errors.Join(gen.errs...)
+	}
+	// Stale owned HTML must disappear before sitemap collection, otherwise
+	// this run could advertise URLs it removes immediately afterward.
+	if err = gen.cleanupMarkdownOutputs(); err != nil {
+		return err
+	}
 	if sitemapURL, sErr := gen.generateSitemap(); sErr != nil {
 		gen.recordErr(sErr)
 	} else if sitemapURL != "" {
@@ -510,6 +531,9 @@ func (gen *Generator) Run() error {
 	}
 	if len(gen.errs) > 0 {
 		return errors.Join(gen.errs...)
+	}
+	if err = gen.finishMarkdownOutputs(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -660,7 +684,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	// whose entire content is skipped never gets an empty one in deploy.
 	if !info.IsDir() && gen.sourceIsNewer(path, info) {
 		outputPath := swapExtension(path, ".md", ".html")
-		if claimant, ok := gen.claimedOutputs[outputPath]; ok {
+		if claimant, ok := gen.claimedOutputs[outputPath]; ok && gen.markdownState == nil {
 			gen.recordErr(fmt.Errorf("%s: output path %q already claimed by %s, skipping", path, outputPath, claimant))
 			return
 		}
@@ -724,7 +748,7 @@ func (gen *Generator) renderAsync(path string) {
  * -full run, which clears the whole deploy directory upfront, is needed to
  * remove it.
  */
-func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error) {
+func (gen *Generator) reaper(path string, info os.FileInfo, err error) (ierr error) {
 	if err != nil {
 		// filepath.Walk lists a directory's children before invoking this
 		// callback for the directory itself, so RemoveAll below leaves Walk
@@ -735,6 +759,9 @@ func (gen *Generator) reaper(path string, _ os.FileInfo, err error) (ierr error)
 			return nil
 		}
 		return err
+	}
+	if gen.markdownReaperProtected(path, info) {
+		return nil
 	}
 	sourcePath := "." + strings.TrimPrefix(path, gen.GetDeployPath())
 	_, err = os.Stat(sourcePath)
@@ -777,6 +804,9 @@ func (gen *Generator) sourceIsNewer(path string, sourceInfo os.FileInfo) bool {
 	if gen.Full {
 		return true
 	}
+	if gen.markdownTwinMissing(path) {
+		return true
+	}
 	realpath := swapExtension(path, ".md", ".html")
 	destination, err := os.Open(gen.BuildDeployPath(realpath))
 	if err != nil {
@@ -814,6 +844,9 @@ func (gen *Generator) renderMarkdown(path string) (err error) {
 	input, err := os.ReadFile(path)
 	if err != nil {
 		return
+	}
+	if gen.markdownOutputEnabled(input) {
+		return gen.renderMarkdownTwin(path, input)
 	}
 	var b bytes.Buffer
 	if err := markdownConverter.Convert(input, &b); err != nil {
@@ -1268,7 +1301,14 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 			return
 		}
 	}
-	doc, err := gen.parseAndReplace(&processed, &data, headDropped)
+	return gen.renderPrepared(path, processed.Bytes(), &data)
+}
+
+// renderPrepared consumes HTML whose page template has already executed.
+// Both the legacy renderer and opt-in Markdown preparation share this final
+// metadata/body extraction and layout pass.
+func (gen *Generator) renderPrepared(path string, input []byte, data *ZasData) (err error) {
+	doc, err := gen.parseAndReplace(bytes.NewReader(input), data, headDropped)
 	if err != nil {
 		return
 	}
@@ -1339,9 +1379,13 @@ func (gen *Generator) render(path string, input []byte) (err error) {
 		// previously-published file's stale output under .zas/deploy
 		// survives an incremental run and needs a -full run (which clears
 		// the whole deploy directory upfront) to actually disappear.
+		gen.excludeMarkdownOutputs(path)
 		return nil
 	}
-	return gen.Generate(path, &data)
+	if err = gen.Generate(path, data); err != nil {
+		return err
+	}
+	return gen.writeMarkdownOutput(path, data)
 }
 
 // pagePublished reports whether a page should be written to the deploy
