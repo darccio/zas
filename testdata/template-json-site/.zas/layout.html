@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html lang="{{.Language}}">
+<head>
+  <title>{{.Title}}</title>
+  {{$person := dict "@type" "Person" "name" "Dario Castañé"}}
+  {{$article := dict "@type" "BlogPosting" "headline" .Title "url" .Canonical "description" .Summary "datePublished" (.Date.Format "2006-01-02T15:04:05Z07:00") "dateModified" (.Updated.Format "2006-01-02T15:04:05Z07:00") "keywords" .Tags}}
+  <script type="application/ld+json">{{json (dict "@context" "https://schema.org" "@graph" (list $person $article))}}</script>
+</head>
+<body>{{.Body}}</body>
+</html>

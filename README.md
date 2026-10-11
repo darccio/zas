@@ -450,6 +450,25 @@ First header level 1 from Markdown files will be made available as `{{.Title}}`,
 
 `layout.html` is parsed with Go's `html/template`, which auto-escapes values by default - unlike a page's own content, which has none at all (see "A page's own content has no escaping at all" above). A `noescape` helper is available if you need to output a string as trusted, unescaped HTML - e.g. `{{noescape .SomeTrustedHTML}}`. Only use it on content you trust: passing it anything that could contain attacker-controlled input (a value from user-submitted content, an untrusted third-party feed, etc.) reintroduces the XSS risk `html/template` exists to prevent. If you don't need it, don't use it.
 
+#### JSON in layouts
+
+Three layout-only helpers build and serialize structured data:
+
+- `dict "key" value ...` creates an object. Keys must be strings and appear once; an odd number of arguments is an error. `dict` with no arguments produces `{}`.
+- `list value ...` creates an array, including `[]` when called without arguments.
+- `json value` serializes a Go value with `encoding/json.Marshal`. Unsupported values, invalid custom marshalers and cyclic values stop template execution with an error.
+
+Use the helpers together to emit a JSON-LD data block:
+
+```html
+{{$person := dict "@type" "Person" "name" "Dario Castañé" "url" .Site.BaseURL}}
+<script type="application/ld+json">{{json (dict "@context" "https://schema.org" "@graph" (list $person))}}</script>
+```
+
+`json` marks only its freshly serialized output as a JSON expression for `html/template`, so the block contains an object rather than a quoted JSON document. Ordinary and pre-encoded strings remain JSON strings; construct objects with `dict` instead of passing raw JSON text. The serializer retains its default escaping of `<`, `>`, `&`, U+2028 and U+2029, including custom `json.Marshaler` and `json.RawMessage` values, so data cannot close the script element. Go types with custom JSON behavior remain responsible for their data's meaning.
+
+Use `json` for a complete JSON expression, outside any JavaScript quotes. HTML text and attribute contexts still receive `html/template`'s contextual escaping; the helper is not an HTML bypass. It is unavailable in a page's own `text/template` content and emits nothing unless a layout calls it. No JSON-LD schema or metadata is added automatically.
+
 ### But... I want to do pages beyond post-like format
 
 No problem! Just use our old friend `<embed>`. Imagine `<layout>` is a valid tag.

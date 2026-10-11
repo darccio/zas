@@ -49,6 +49,9 @@ import (
 
 var helpers = thtml.FuncMap{
 	"noescape": noescape,
+	"dict":     templateDict,
+	"list":     templateList,
+	"json":     templateJSON,
 }
 
 // rawHTMLRenderer overrides only goldmark's raw-HTML node kinds (block and
