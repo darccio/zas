@@ -1,0 +1,10 @@
+zas:
+  layout: .zas/layout.html
+  deploy: .zas/deploy
+site:
+  baseurl: https://example.com/blog/
+  marker: final
+  date: "2024-11-27T22:22:00+01:00"
+mimetypes:
+  text/markdown: markdown
+  text/html: html

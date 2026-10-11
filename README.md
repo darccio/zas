@@ -244,11 +244,37 @@ Keep in mind that any file will be treated as a Go text template before any furt
 * `{{.FirstTitle}}`: the file's first H1 header text, before any `title` override is applied - what `{{.Title}}` falls back to. Same best-effort preview behavior as `{{.Page}}` when used from inside a page's own content, with one more guard: if the H1 itself is written as `<h1>{{.Title}}</h1>`, the preview is deliberately left unavailable there instead of echoing the literal, unexecuted `{{.Title}}` text back into itself.
 * `{{.Directory}}`: YAML map from above (up to project's directory) or current directory's `.zas.yml` file. It is optional.
 * `{{.URL}}`: full URL for this file.
+* `{{.Canonical}}`: full URL with a final `/index.html` replaced by `/`, so `section/index.md` and `section/index.html` both yield `/section/`. A standalone `article.md` still yields `/article.html`. This helper leaves `{{.URL}}`, `{{.Path}}` and sitemap URLs unchanged.
+* `{{.Date}}`: publication date as Go's `time.Time`, from the explicit `date` page property only. Missing dates return zero time; Zas never infers a publication date.
+* `{{.Updated}}`: Go's `time.Time` from the explicit `updated` page property, otherwise the last git commit's committer date for the original, currently tracked source file. An untracked file, unavailable git or missing history returns zero time; source mtimes and build time are never substituted. Use a full-history checkout in CI for reliable git dates.
+* `{{.Summary}}`: the explicit `summary` page string, empty when absent.
+* `{{.Tags}}`: the `tags` page list of strings in its original order, empty when absent.
 * `{{.Extra "/path/"}}`: direct access to map holding `.zas/config.yml` as it is. You can access to any value with its full path. E.g. BaseURL is also available as `/site/baseurl`.
 * `{{.Resolve id}}`: indirect access to site, directory and page config. It works with simple keys (no paths), checking for them in page, directory and site config (as `/site/<id>`), in this order.
 * `{{.Language}}`: file current language, if defined in the first comment (as YAML property `language`). By default, `/site/language` value.
 * `{{.E "Some key"}}`: translates a string for the page's resolved language (see I18N below), falling back to `**Some key**` when no translation is found. Takes optional `fmt.Sprintf`-style arguments: `{{.E "Hello, %s" .Name}}`.
 * `{{.H "Some key"}}`: like `{{.E}}`, but the translation is marked as trusted HTML rather than plain text - see the escaping note right below for what that means and where it matters.
+
+Metadata helpers read the same `{{.Page}}` view as other page methods: a best-effort preview in the page's own content, then the final rendered config in the layout. They validate values only when called, so adding them to Zas changes no existing output. Invalid explicit `date`, `updated`, `summary` or `tags` values stop template execution with a diagnostic; raw `{{.Page}}` access keeps its existing behavior. Dates must be RFC3339 timestamps with a timezone, quoted or unquoted in YAML. Day-only and timezone-free timestamps are rejected even when YAML would otherwise convert them to `time.Time`. The helpers do not read legacy `date_created`, `date_updated` or `description` properties.
+
+For example, a page may start with:
+
+```yaml
+<!--
+date: 2024-11-27T22:22:00+01:00
+updated: "2025-01-02T03:04:05Z"
+summary: A short summary.
+tags: [writing, software]
+-->
+```
+
+In `layout.html`, format a date after checking that it is present:
+
+```html
+{{if not .Date.IsZero}}<time datetime="{{.Date.Format "2006-01-02T15:04:05Z07:00"}}">{{.Date.Format "2006-01-02"}}</time>{{end}}
+{{with .Summary}}<p>{{.}}</p>{{end}}
+{{range .Tags}}<span>{{.}}</span>{{end}}
+```
 
 #### A page's own content has no escaping at all
 

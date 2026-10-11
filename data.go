@@ -69,6 +69,13 @@ type ZasData struct {
 	Directory ConfigSection
 	// Config loaded from ConfigFile.
 	config ConfigSection
+	// Original source filename, before converting .md to the deployed .html
+	// path. Updated uses this filename when looking up tracked git history.
+	sourcePath string
+	// The config comment for the current Page view (preview or final). YAML
+	// coerces date-only timestamps to time.Time; retaining their scalar text
+	// lets date helpers reject them without changing Page's existing types.
+	pageConfigSource []byte
 	// i18n helper
 	i18n *i18n.Build
 	// Attributes from the source page's own <body> tag (if any), merged
@@ -215,6 +222,7 @@ func (zd *ZasData) IsHome() (bool, error) {
 
 // NewZasData builds a ZasData for the page at srcPath.
 func NewZasData(srcPath string, gen *Generator) (data ZasData) {
+	data.sourcePath = srcPath
 	// Any path must finish in ".html".
 	srcPath = swapExtension(srcPath, ".md", ".html")
 	// filepath.Walk (the only caller) yields srcPath with the OS's own
