@@ -79,7 +79,7 @@ func TestMarkdownOutputDisabledIsByteIdentical(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeMarkdownTestFile(t, ConfigFile, strings.Replace(string(config), "site:\n", "site:\n  markdown_output: false\n", 1))
+	writeMarkdownTestFile(t, ConfigFile, strings.Replace(string(config), "site:\n", "site:\n  publish_markdown: false\n", 1))
 	if err := generate(t, fullGen); err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestMarkdownOutputIncrementalLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertDeployHas(t, "renamed.md")
-	writeMarkdownTestFile(t, "renamed.md", "<!--\nmarkdown_output: false\n-->\n# HTML retained\n")
+	writeMarkdownTestFile(t, "renamed.md", "<!--\npublish_markdown: false\n-->\n# HTML retained\n")
 	if err := generate(t); err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestMarkdownOutputToggleAndEditedOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeMarkdownTestFile(t, ConfigFile, strings.Replace(string(config), "markdown_output: true", "markdown_output: false", 1))
+	writeMarkdownTestFile(t, ConfigFile, strings.Replace(string(config), "publish_markdown: true", "publish_markdown: false", 1))
 	if err := generate(t); err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestMarkdownOutputUnsupportedContentAndOptOut(t *testing.T) {
 			newTestSite(t, "markdown-output")
 			writeMarkdownTestFile(t, "unsupported.md", input)
 			err := generate(t, noPluginsGen)
-			if err == nil || !strings.Contains(err.Error(), "markdown_output: false") {
+			if err == nil || !strings.Contains(err.Error(), "publish_markdown: false") {
 				t.Fatalf("unsupported content error = %v, want page opt-out guidance", err)
 			}
 			assertDeployMissing(t, "unsupported.md")
@@ -269,7 +269,7 @@ func TestMarkdownOutputUnsupportedContentAndOptOut(t *testing.T) {
 	// An explicit opt-out retains the legacy HTML path, including an
 	// otherwise unsupported inline Markdown embed.
 	newTestSite(t, "markdown-output")
-	writeMarkdownTestFile(t, "unsupported.md", "<!--\nmarkdown_output: false\n-->\n# HTML only\n\nInline <embed src=\".zas/partials/details.md\" type=\"text/markdown\"> content.\n")
+	writeMarkdownTestFile(t, "unsupported.md", "<!--\npublish_markdown: false\n-->\n# HTML only\n\nInline <embed src=\".zas/partials/details.md\" type=\"text/markdown\"> content.\n")
 	if err := generate(t, noPluginsGen); err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +338,7 @@ func TestMarkdownOutputManifestDoesNotCleanOtherDeploy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated := strings.Replace(string(config), "markdown_output: true", "markdown_output: false", 1)
+	updated := strings.Replace(string(config), "publish_markdown: true", "publish_markdown: false", 1)
 	updated = strings.Replace(updated, "deploy: .zas/deploy", "deploy: .zas/other", 1)
 	writeMarkdownTestFile(t, ConfigFile, updated)
 	if err := generate(t); err != nil {
@@ -486,7 +486,7 @@ func TestMarkdownOutputFailureRecoveryAndPluginInvocation(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(Dir, "plugin-calls")); !os.IsNotExist(err) {
 		t.Fatal("unsupported twin content invoked a plugin")
 	}
-	writeMarkdownTestFile(t, "count.md", "<!--\nmarkdown_output: false\n-->\n# Count\n\n<script type=\" Application/Zas+Count \">payload</script>\n")
+	writeMarkdownTestFile(t, "count.md", "<!--\npublish_markdown: false\n-->\n# Count\n\n<script type=\" Application/Zas+Count \">payload</script>\n")
 	if err := generate(t); err != nil {
 		t.Fatalf("retry after partial failed build: %v", err)
 	}

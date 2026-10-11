@@ -1,5 +1,5 @@
 <!--
-markdown_output: false
+publish_markdown: false
 -->
 # HTML only
 

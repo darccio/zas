@@ -2,7 +2,7 @@ site:
   baseurl: https://example.com
   language: en
   title: Example site
-  markdown_output: true
+  publish_markdown: true
 zas:
   layout: .zas/layout.html
   deploy: .zas/deploy

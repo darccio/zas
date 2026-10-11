@@ -49,10 +49,10 @@ type markdownOutputState struct {
 func (gen *Generator) prepareMarkdownOutputs() error {
 	gen.markdownState = nil
 	section := gen.Config.GetSection("site")
-	enabled := section.GetBool("markdown_output")
-	if value, exists := section["markdown_output"]; exists {
+	enabled := section.GetBool("publish_markdown")
+	if value, exists := section["publish_markdown"]; exists {
 		if _, ok := value.(bool); !ok {
-			return errors.New("site.markdown_output must be a boolean")
+			return errors.New("site.publish_markdown must be a boolean")
 		}
 	}
 	manifestPath := filepath.Join(Dir, markdownManifestName)
@@ -141,9 +141,9 @@ func (gen *Generator) prepareMarkdownOutputs() error {
 			return err
 		}
 		page := earlyPageConfig(input)
-		if value, exists := page["markdown_output"]; exists {
+		if value, exists := page["publish_markdown"]; exists {
 			if _, boolean := value.(bool); !boolean {
-				return fmt.Errorf("%s: markdown_output must be a boolean", path)
+				return fmt.Errorf("%s: publish_markdown must be a boolean", path)
 			}
 		}
 		if !pagePublished(page) {
@@ -164,7 +164,7 @@ func (gen *Generator) prepareMarkdownOutputs() error {
 					return hashErr
 				}
 				if !owned || digest != old {
-					return fmt.Errorf("%s: Markdown output %q already exists without matching generator ownership; move it or set markdown_output: false on this page", path, twin)
+					return fmt.Errorf("%s: Markdown output %q already exists without matching generator ownership; move it or set publish_markdown: false on this page", path, twin)
 				}
 			} else if !os.IsNotExist(err) {
 				return err
@@ -268,7 +268,7 @@ func markdownTwinPath(path string) string {
 
 func markdownPageEligible(page map[interface{}]interface{}) bool {
 	draft, _ := page["draft"].(bool)
-	optOut, specified := page["markdown_output"].(bool)
+	optOut, specified := page["publish_markdown"].(bool)
 	return pagePublished(page) && !draft && (!specified || optOut)
 }
 
@@ -479,7 +479,7 @@ func (gen *Generator) renderMarkdownTwin(path string, input []byte) error {
 	}
 	body, err := gen.expandMarkdownEmbeds(stripMarkdownConfig(processed), &data, filepath.Dir(path), 0, true)
 	if err != nil {
-		return fmt.Errorf("markdown output: %w; set markdown_output: false on this page to retain HTML-only rendering", err)
+		return fmt.Errorf("markdown output: %w; set publish_markdown: false on this page to retain HTML-only rendering", err)
 	}
 	data.markdownBody = body
 	var converted bytes.Buffer
@@ -507,7 +507,7 @@ func executeMarkdownTemplate(input []byte, data *ZasData) ([]byte, error) {
 		return nil, err
 	}
 	if bytes.Contains(output.Bytes(), templateActionOpen) {
-		return nil, errors.New("rendered Markdown contains unresolved Go template delimiters; use template: false for literal template documentation, or markdown_output: false for HTML-only rendering")
+		return nil, errors.New("rendered Markdown contains unresolved Go template delimiters; use template: false for literal template documentation, or publish_markdown: false for HTML-only rendering")
 	}
 	return output.Bytes(), nil
 }

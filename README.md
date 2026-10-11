@@ -308,7 +308,7 @@ in `.zas/config.yml`:
 
 ```yaml
 site:
-  markdown_output: true
+  publish_markdown: true
 ```
 
 `section/index.md` produces `section/index.html` and `section/index.md` in
@@ -332,14 +332,14 @@ comment is removed from twins, including embedded files' leading comments.
 Twins contain the body only: no automatic serialization of `.Page`,
 `.Directory`, `.Extra`, or other metadata maps, and no layout chrome.
 
-`publish: false`, `draft: true`, and page-level `markdown_output: false`
+`publish: false`, `draft: true`, and page-level `publish_markdown: false`
 suppress a twin. A draft still produces its existing HTML page; this feature
 does not unpublish live drafts. An explicit page opt-out keeps the legacy
 HTML rendering path, including its normal plugin behavior:
 
 ```markdown
 <!--
-markdown_output: false
+publish_markdown: false
 -->
 # HTML-only page
 ```
@@ -379,7 +379,7 @@ Zas stores output paths and hashes in the private
 `.zas/markdown-outputs.json`, with the resolved deploy identity. Incremental
 builds recreate missing twins and clean previous owned outputs when a source
 is deleted, renamed, unpublished, marked draft, or opted out. Disabling
-`site.markdown_output` removes owned twins on the next successful build and
+`site.publish_markdown` removes owned twins on the next successful build and
 removes the manifest; HTML pages remain. Incremental cleanup deletes only
 files whose hashes still match ownership, preserving manual edits and
 unowned Markdown files. It may leave empty deploy directories. Ownership
