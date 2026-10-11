@@ -18,6 +18,12 @@ Yes, it is another NIH, but... I think Zas is a different kind of beast. I admit
 4. Your imagination is your limit. Zas has a simple extension mechanism based on subcommands, plus optional native sitemaps and RSS feeds for article sites.
 5. Unobtrusive structure, no `_` files. More in the [Usage section](#usage).
 
+## Documentation
+
+The [documentation source](docs/index.md) is published at [dario.cat/zas](https://dario.cat/zas/), with focused guides to configuration, templates, plugins and publishing. Hosting the guides there does not change the module path `github.com/darccio/zas`.
+
+Docs changes on `master` and published releases request a pinned source update in the site repository. A reviewed site pull request must be merged before Cloudflare Pages deploys the update. Configure `SITE_DISPATCH_TOKEN` as described in [the dispatch workflow](.github/workflows/docs-dispatch.yml); without it, the workflow reports a notice and skips dispatch.
+
 ## Usage
 
 Install:
