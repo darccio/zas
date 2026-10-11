@@ -17,8 +17,13 @@ coverage.out
 # Local test site output
 .zas/deploy/
 
-# Local working notes
-/docs/
+# Local working notes, except the approved public documentation sources
+/docs/*
+!/docs/index.md
+!/docs/configuration.md
+!/docs/templates.md
+!/docs/publishing.md
+!/docs/LICENSE.txt
 
 #####=== Vim ===#####
 [._]*.s[a-w][a-z]
