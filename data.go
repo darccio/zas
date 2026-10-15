@@ -105,6 +105,8 @@ type ZasData struct {
 	// markdownBody is the optional public, rendered Markdown body. It is
 	// populated only by the opt-in Markdown preparation path.
 	markdownBody []byte
+	// pageListings is the immutable static-source snapshot for this run.
+	pageListings *pageListingState
 }
 
 // ZasSiteData is the site configuration.
@@ -226,6 +228,7 @@ func (zd *ZasData) IsHome() (bool, error) {
 // NewZasData builds a ZasData for the page at srcPath.
 func NewZasData(srcPath string, gen *Generator) (data ZasData) {
 	data.sourcePath = srcPath
+	data.pageListings = gen.pageListings
 	// Any path must finish in ".html".
 	srcPath = swapExtension(srcPath, ".md", ".html")
 	// filepath.Walk (the only caller) yields srcPath with the OS's own

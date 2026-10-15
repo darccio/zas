@@ -224,6 +224,9 @@ type Generator struct {
 
 	// markdownState is nil for legacy sites that have never opted in.
 	markdownState *markdownOutputState
+	// pageListings is nil unless site.page_listings opts into a source snapshot.
+	pageListings     *pageListingState
+	pageListingsUsed bool
 }
 
 // renderConcurrency bounds how many renderAsync goroutines may run at
@@ -480,6 +483,9 @@ func (gen *Generator) Run() (runErr error) {
 		return err
 	}
 	gen.Config = cfg
+	if err = gen.preparePageListings(); err != nil {
+		return err
+	}
 	if err = gen.prepareMarkdownOutputs(); err != nil {
 		return err
 	}
@@ -665,9 +671,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	// allowedDotDir's approval, since nothing beneath a directory that
 	// wasn't pruned ever starts with a dot in its own basename unless it
 	// independently does too.
-	dotPath := strings.HasPrefix(filepath.Base(path), ".") && !gen.allowedDotDir(path, info)
-	if dotPath || pathHasComponent(path, Dir) ||
-		path == gen.GetDeployPath() || path == gen.Config.GetZString("layout") {
+	if gen.sourceExcluded(path, info) {
 		if path != "." && info.IsDir() {
 			return filepath.SkipDir
 		}
@@ -694,7 +698,7 @@ func (gen *Generator) walk(path string, info os.FileInfo, err error) (ierr error
 	// creates a source directory's deploy-side counterpart lazily, only
 	// once something actually needs to be written into it, so a directory
 	// whose entire content is skipped never gets an empty one in deploy.
-	if !info.IsDir() && (gen.feedNeedsRender(path) || gen.sourceIsNewer(path, info)) {
+	if !info.IsDir() && (gen.pageListingNeedsRender(path) || gen.feedNeedsRender(path) || gen.sourceIsNewer(path, info)) {
 		outputPath := swapExtension(path, ".md", ".html")
 		if claimant, ok := gen.claimedOutputs[outputPath]; ok && gen.markdownState == nil {
 			gen.recordErr(fmt.Errorf("%s: output path %q already claimed by %s, skipping", path, outputPath, claimant))
@@ -1366,6 +1370,9 @@ func (gen *Generator) renderPrepared(path string, input []byte, data *ZasData) (
 			}
 		}
 	}
+	if err = gen.checkPageListingPublication(path, data.Page); err != nil {
+		return err
+	}
 	if err = gen.collectFeed(data); err != nil {
 		return err
 	}
@@ -1388,14 +1395,11 @@ func (gen *Generator) renderPrepared(path string, input []byte, data *ZasData) (
 		// re-parsed, though never written) on every incremental run. This
 		// is a minor inefficiency, not a correctness bug.
 		//
-		// It also means reaper - which only removes deploy output whose
-		// source no longer exists - won't notice a page that keeps
-		// existing but newly opts out with "publish: false": a
-		// previously-published file's stale output under .zas/deploy
-		// survives an incremental run and needs a -full run (which clears
-		// the whole deploy directory upfront) to actually disappear.
+		// The legacy reaper only notices missing sources, so newly private
+		// pages need -full to remove old HTML. Listing-enabled runs have
+		// complete output claims and remove that stale HTML safely below.
 		gen.excludeMarkdownOutputs(path)
-		return nil
+		return gen.removeUnpublishedListingOutput(path)
 	}
 	if err = gen.Generate(path, data); err != nil {
 		return err

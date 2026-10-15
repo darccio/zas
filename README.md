@@ -83,6 +83,7 @@ site:
   language: en                  # default: en - see {{.Language}} and I18N below
   image: https://example.com/og-image.png # default: unset - see {{.Site.Image}} below
   sitemap: true                 # default: false - see "Sitemap generation" below
+  page_listings: true           # default: false - expose static page lists to templates
   feed: true                    # default: false - see "RSS feeds" below
   feed_title: My articles       # default: site.title; required when feeds are enabled
   feed_description: New writing # default: site.description, then feed title
@@ -200,6 +201,73 @@ With that set, every `zas generate` run writes `sitemap.xml` at the deploy root,
 **Multilingual sites.** A site using the language-subdirectory i18n convention described below (see "你会说普通话?") gets reciprocal `hreflang` annotations for free: pages that share the same relative path across language directories (`es/faq.md`, `ca/faq.md`, root `faq.md`, ...) are grouped and cross-linked automatically, with no extra configuration beyond what I18N already requires. A page not grouped that way - one whose language comes only from its own leading-comment override, with no directory-level grouping - doesn't get hreflang treatment; partial translation coverage (a page with no sibling translation yet) is never an error, it simply ships without hreflang links of its own.
 
 **`robots.txt`.** When sitemap generation is on, Zas makes sure deploy's `robots.txt` declares a `Sitemap:` directive pointing at whatever was generated (the plain sitemap, or the index once sharded): if your own `robots.txt` reaches deploy (it's just another file, copied like any other unrecognized extension), Zas appends the directive to it if it's missing; if your site has no `robots.txt` at all, Zas writes a minimal permissive one (`User-agent: *` / `Allow: /`) so the sitemap stays discoverable with zero extra setup.
+
+## Page listings
+
+Enable `site.page_listings: true` to use `{{.Pages "posts"}}` in a page's
+HTML or Markdown template, or in the layout. Without this option, Zas does
+no listing scan and existing output is unchanged; calling `.Pages` reports
+the required option.
+
+For example, an archive page can use a literal leading configuration
+comment and heading, followed by:
+
+```html
+<!-- title: Posts -->
+<h1>Posts</h1>
+<ul>
+{{range .Pages "posts"}}
+  <li><a href="{{html .URL}}">{{html .Title}}</a>{{if not .Date.IsZero}} — {{.Date.Format "2006-01-02"}}{{end}}</li>
+{{end}}
+</ul>
+```
+
+Page content uses `text/template`, so the `html` builtin explicitly escapes
+plain strings placed into HTML. In the layout, `html/template` escapes
+`.URL`, `.Title` and `.Summary` automatically; use those fields directly.
+
+`.Pages(section)` returns `([]PageSummary, error)`. Each summary has exported
+`Title`, `URL`, `Canonical`, `Date`, `Language` and `Summary` fields. `Date`
+is a `time.Time`; the other fields are plain strings. `URL` is an escaped,
+root-relative navigation path, including any `site.baseurl` hosting subpath,
+with `/index.html` normalized to `/`, so links stay on the current preview
+host. `Canonical` uses the same path and
+the existing `.Canonical` helper's `site.baseurl` prefix, or remains
+root-relative when that prefix is empty.
+
+A section selects all descendants at directory boundaries: `posts` includes
+`posts/older.md` and `posts/slug/index.md`, excludes `posts/index.md`, and
+does not match `posts-old`. Only the requested section's own index is
+omitted. `""` and `"."` select the site root; a missing section returns an
+empty list. Use relative directory paths, optionally ending in `/`.
+Absolute paths, traversal, backslashes, URL queries/fragments and encoded
+path syntax are rejected when the template calls `.Pages`. As with other
+template errors, a failing full build may already have cleared deploy;
+use a staging directory when published output must survive a failed build.
+
+The list is a complete, immutable snapshot of static Markdown and HTML
+sources, made once before rendering. Hidden sources, symlinks, the layout,
+deploy files, `publish: false` and `draft: true` are excluded. Allowed
+top-level dot-directories follow the normal source rules. Draft exclusion
+affects the list; ordinary HTML publication keeps its existing behavior.
+Metadata uses the literal leading YAML comment: `title` falls back to the
+first static H1, `date` and `summary` use their existing helpers, and
+language resolves from page, nearest directory config, then site. Missing
+titles/summaries/languages are empty. Missing dates stay zero and sort last;
+known dates sort newest first, with URL breaking equal-date ties.
+
+The scan never executes templates, embeds or plugins. Listed metadata must
+be valid static values; template actions in metadata are rejected unless
+the page has `template: false`. A template-derived H1 produces an empty
+listing title: provide a literal `title` instead. A leading template action
+that could generate the configuration comment is rejected; put a literal
+configuration comment or heading before body actions. Invalid static
+metadata fails before full-build cleanup. Generated publication flags that
+disagree with the snapshot fail the build when rendering reveals them.
+Every HTML/Markdown page renders on each enabled run so additions, removals
+and metadata edits update every archive.
+Newly unpublished pages also lose their stale standalone HTML in incremental
+builds. This opt-in favors consistent listings over incremental render speed.
 
 ## RSS feeds
 
