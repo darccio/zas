@@ -6,7 +6,7 @@ require (
 	dario.cat/mergo v1.0.2
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/yuin/goldmark v1.8.6
-	go.yaml.in/yaml/v3 v3.0.5
+	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/net v0.59.0
 )
 
